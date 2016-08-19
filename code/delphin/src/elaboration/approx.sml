@@ -161,8 +161,11 @@ structure DelphinApprox =
     and unifyNormalDecs (NormalDec (_, _, T1), NormalDec (_, _, T2)) = unifyTypes(T1, T2)
 
     and unifyNormalDecsList ([], []) = ()
-      | unifyNormalDecsList ((D.Implicit, D1)::D1s, (D.Implicit, D2)::D2s) = unifyNormalDecsList (D1s, D2s)
       | unifyNormalDecsList ((D.Visible, D1)::D1s, (D.Visible, D2)::D2s) = (unifyNormalDecs(D1, D2) ; unifyNormalDecsList (D1s, D2s))
+      (*  | unifyNormalDecsList ((D.Implicit, D1)::D1s, (D.Implicit, D2)::D2s) = unifyNormalDecsList (D1s, D2s)  *)
+      | unifyNormalDecsList ((D.Implicit, D1)::D1s, D2s) = unifyNormalDecsList (D1s, D2s)
+      | unifyNormalDecsList (D1s, (D.Implicit, D2)::D2s) = unifyNormalDecsList (D1s, D2s)
+
       | unifyNormalDecsList _ = raise ApproxUnify ("Approx. Matching Failed: Incompatible Decs")
 
     and unifyNewDecs (NewDecLF (_, _, A1), NewDecLF (_, _, A2)) = 

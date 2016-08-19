@@ -29,7 +29,7 @@ fun fparse (displayName, fname) =
    let 
        val _ = Interface.reset()
        val _ = Interface.fnameOpt := SOME(displayName)
-       val _ = Paths.resetLines()
+       val _ = Paths.resetLines(displayName)
        val _ = Paths.newLine(1)
 
        fun process(OS.SysErr (s, _)) = s
@@ -67,7 +67,7 @@ fun fparse (displayName, fname) =
 fun sparse () =
   let 
     val _ = Interface.reset()
-    val _ = Paths.resetLines()
+    val _ = Paths.resetLines("stdIn")
     val _ = Paths.newLine(1)
 
     (* Gets input up to first semicolon (w.r.t. balanced parenthesis) *)

@@ -84,3 +84,5 @@ v-form : !- M !*! uni K -> !- v M !*! boolean
 	     fun-elim (fun-elim (=p=-form T ND) ND1) ND2.
 
 
+
+

@@ -16,7 +16,7 @@ struct
   structure LS = Stream    
 
   local
-    val version = "Delphin, Release Version 1.5.0, April 20, 2008"
+    val version = "Delphin, Release Version 1.5.1, April 23, 2008"
 
     val debug = ref false
     val enableCoverage = C.enableCoverage (* default is set in convert.fun to true *)
@@ -126,10 +126,10 @@ struct
       | spaceString(x) = " " ^ spaceString(x-1)
 
 
-    fun solutionToString (s, T, NONE) = "val " ^ s ^ " : " ^ T ^ "\n" ^ spaceString(String.size(s)) 
+    fun solutionToString (s, T, (NONE, _)) = "val " ^ s ^ " : " ^ T ^ "\n" ^ spaceString(String.size(s)) 
                                         ^ " = " ^ "(no solution)" ^ "\n"
 
-      | solutionToString (s, T, SOME(E)) = 
+      | solutionToString (s, T, (SOME(E), _)) = 
            let
 	     val firstLine = "val " ^ s ^ " : " ^ T ^ "\n" 
 	     val secondLineHead = spaceString(String.size(s)) ^ " = "
@@ -144,7 +144,7 @@ struct
 
 
     fun eval E = 
-      (SOME(O.eval0 E) handle O.NoSolution => NONE)
+      ((SOME(O.eval0 E), "") handle O.NoSolution s => (NONE, s))
 
 
 
@@ -477,7 +477,7 @@ struct
                              
 			     (* Coverage Checking *)
 			     val _ = if (!enableCoverage) then
-			             ((DelphinCoverage.checkCovers(!smartInj, !printPatternVars, G, result') ; ())
+			             ((DelphinCoverage.check(!smartInj, !printPatternVars, G, result') ; ())
 				      handle DelphinCoverage.CoverageError s => stop s)
 				     else
 				       ()
@@ -574,7 +574,7 @@ struct
                              
 			  (* Coverage Checking *)
 			  val _ = if (!enableCoverage) then
-			             ((DelphinCoverage.checkCovers(!smartInj, !printPatternVars, G, result') ; ())
+			             ((DelphinCoverage.check(!smartInj, !printPatternVars, G, result') ; ())
 				      handle DelphinCoverage.CoverageError s => ((stop s)))
 				     else
 				       ()
@@ -594,16 +594,7 @@ struct
 				  else ()
 
 
-                          (* Termination checking *)
-			  val _ = if (!enableTermination) then
-			             ((DelphinTermination.check(!debug, !smartInj, !printPatternVars, C.getFilename(), r, G, result') ; ())
-				      handle DelphinTermination.Error s => ((stop s)))
-				     else
-				       ()
-
-
 			  val result = D'.substE'(result', t)
-
 
                           (*
 			  (* Type checking *)
@@ -619,16 +610,26 @@ struct
 			  val _ = print (solutionToString(s, PrintDelphinInt.typeToString(G, T, !smartInj), Vopt))
 
 			  val _ = case Vopt of 
-			           NONE => raise Error (Paths.wrapLoc(Paths.Loc (C.getFilename(),r),"Match Non-Exhaustive Failure"))
+			           (NONE, s) => raise Error (s ^ (Paths.wrapLoc(Paths.Loc (C.getFilename(),r),"Match Non-Exhaustive Failure (caller)")))
 				   | _ => ()
 
 			in
 			  case Vopt
-			      of NONE => (false, (G, t))
+			      of (NONE, _) => (false, (G, t))
 				
-			       | SOME V' => (true, 
-					     (I.Decl(G, (D'.InstantiableDec Ddomain)), 
-					      D'.Dot(D'.Prg V', t)))
+			       | (SOME V', _) => 
+				     let
+				       (* Termination checking *)
+				       val _ = if (!enableTermination) then
+					    ((DelphinTermination.check(!debug, !smartInj, !printPatternVars, C.getFilename(), r, I.Null, V') ; ())
+					     handle DelphinTermination.Error s => ((stop s)))
+					       else
+						 ()
+				     in				       
+				       (true, 
+					(I.Decl(G, (D'.InstantiableDec Ddomain)), 
+					 D'.Dot(D'.Prg V', t)))
+				     end
 			end
 		)
 	    end
@@ -686,6 +687,12 @@ struct
  
     and loadFile' s =
       let 
+	(* Reset to startDir in case there was a break in the middle 
+	 * of execution *)
+	val _ = dirPrefix := "" (* in case there is a break in the middle *)
+	val _ = chDir (!startDir)
+	(* End Reset *)
+
 	val _ = metaSig := nil
 
 	val {dir=dir, file=fname} = OS.Path.splitDirFile s
@@ -746,7 +753,13 @@ struct
 
     and top () = 
       let
+	(* Reset to startDir in case there was a break in the middle 
+	 * of execution *)
 	val _ = dirPrefix := "" (* in case there is a break in the middle *)
+	val _ = chDir (!startDir)
+	(* End Reset *)
+
+
 	val _ = metaSig := nil
 	val _ = C.reset(metaSig) (* world defaultly set to D'.Anything *)
 	val _ = print ("\n" ^ version ^ "\n\n")
@@ -759,11 +772,31 @@ struct
       end
 
 
-    and top' (GRef, tRef) =
+    and initTop'() =
       let
 	val _ = Global.chatter := 0
 	val _ = CSManager.useSolver ("inequality/rationals")
 	val _ = CSManager.useSolver ("equality/strings")
+      in
+	()
+      end
+
+
+    and top' (GRef, tRef) =
+      let
+	(* Reset to startDir in case there was a break in the middle 
+	 * of execution *)
+	val _ = dirPrefix := "" (* in case there is a break in the middle *)
+	val _ = chDir (!startDir)
+	(* End Reset *)
+
+
+	(* Moved to initTop' so it doesn't continually reload
+         * after returning from an interrupt.
+           val _ = Global.chatter := 0
+      	   val _ = CSManager.useSolver ("inequality/rationals")
+	   val _ = CSManager.useSolver ("equality/strings")
+         *)
       in
 	loop (GRef, tRef)
       end
@@ -834,6 +867,7 @@ struct
     val loadFile = loadFile
     val top = top
     val top' = top'
+    val initTop' = initTop'
 
     fun changePath (s) =
       let

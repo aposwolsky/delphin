@@ -52,6 +52,7 @@ struct
       val _ = Delphin.changePath (OS.FileSys.getDir())
       val _ = Delphin.resetMetaSigAndWorld ()
 
+      val _ = Delphin.initTop'();
       val _ = interruptLoop (fn () => Delphin.top'(ContextRef, subRef)) 
 
 

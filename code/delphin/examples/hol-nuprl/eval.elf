@@ -1,0 +1,266 @@
+eval : {A:n-tm}{B:n-tm} type.
+%mode eval +E -E'.
+%deterministic eval.
+evalapp1 : eval (app E1 E2) (app E1' E2)
+           <- eval E1 E1' .
+evalapp2 : eval (app E1 E2) (app E1 E2')
+	    <- eval E2 E2'.
+evalbeta : eval (app (lam E1) E2) (E1 E2).
+evallam : eval (lam E) (lam F)
+	   <- ({x} eval (E x) (F x)).
+evalpi1  : eval (pi E1 E2) (pi E1' E2)
+	    <- eval E1 E1'.
+evalpi2  : eval (pi E1 E2) (pi E1 E2')
+	    <- ({x} eval (E2 x) (E2' x)).
+evalsigma1  : eval (sigma E1 E2) (sigma E1' E2)
+	    <- eval E1 E1'.
+evalsigma2  : eval (sigma E1 E2) (sigma E1 E2')
+	    <- ({x} eval (E2 x) (E2' x)).
+evaleq1 : eval (eq E1 E2 E3) (eq E1' E2 E3)
+	  <- eval E1 E1'.
+evaleq2 : eval (eq E1 E2 E3) (eq E1 E2' E3)
+	  <- eval E2 E2'.
+evaleq3 : eval (eq E1 E2 E3) (eq E1 E2 E3')
+	  <- eval E3 E3'.
+eval+1 : eval (E1 + E2) (E1' + E2)
+	    <- eval E1 E1'.
+eval+2 : eval (E1 + E2) (E1 + E2')
+	    <- eval E2 E2'.
+evalinl : eval (inl E) (inl E')
+	   <- eval E E'.
+evalinr : eval (inr E) (inr E')
+	   <- eval E E'.
+evaldecide1: eval (decide E1 E2 E3) (decide E1' E2 E3)
+	     <- eval E1 E1'.
+evaldecide2: eval (decide (inl E1) E2 E3) (E2 E1).
+evaldecide3: eval (decide (inr E1) E2 E3) (E3 E1).
+evalany : eval (any E) (any E')
+	   <- eval E E'.
+evalpair1: eval (pair E1 E2) (pair E1' E2)
+	   <- eval E1 E1'.
+evalpair2: eval (pair E1 E2) (pair E1 E2')
+	   <- eval E2 E2'.
+evalfst : eval (fst E) (fst E')
+	   <- eval E E'.
+evalsnd : eval (snd E) (snd E')
+	   <- eval E E'.
+evalset1  : eval (set E1 E2) (set E1' E2)
+	    <- eval E1 E1'.
+evalset2  : eval (set E1 E2) (set E1 E2')
+	    <- ({x} eval (E2 x) (E2' x)).
+^^ : n-tm -> n-tm.
+vv : n-tm -> n-tm.
+
+
+eval^^ : eval (^^ E) (^^ E')
+	   <- eval E E'.
+evalvv : eval (vv E) (vv E')
+	   <- eval E E'.
+
+% deterministic
+run : integer -> n-tm -> n-tm -> type.
+%mode run +I +E -V.
+step : run (s N) E1 E3
+       <- run N E1 E2
+       <- eval E2 E3. 
+done : run z V V.
+
+
+%solve d1 : run (s (s (s (s (s (s (s (s z)))))))) (^^ (app (lam ([p:n-tm] vv (pi boolean ([x:n-tm] ^^ (app p x)))))
+         (lam
+             ([x:n-tm]
+                 app
+                    (app (lam ([x1:n-tm] lam ([y:n-tm] if x1 tt y)))
+                        (app (app (=p= boolean) x) tt))
+                    (app (app (=p= boolean) x) ff))))) E.
+
+
+
+
+%solve d1' : run z (decide
+          (app inhabited
+              (pi boolean
+                  ([x:n-tm]
+                      decide (if (v (eq x tt boolean)) tt (v (eq x ff boolean)))
+                         ([x1:n-tm] ntrue) ([x1:n-tm] nfalse))))
+          ([x:n-tm] tt) ([x:n-tm] ff)) E.
+
+
+%solve d2 : run (s (s (s (s (s (s (s (s (s (s (s (s (s z)))))))))))))  (app
+      (lam
+          ([x:n-tm]
+              app
+                 (app
+                     (=p=
+                         (pi (pi boolean ([x17:n-tm] boolean))
+                             ([x18:n-tm] boolean))) x)
+                 (lam
+                     ([x1:n-tm]
+                         app
+                            (app (=p= (pi boolean ([x19:n-tm] boolean)))
+                                (lam ([x2:n-tm] x2)))
+                            (lam ([x2:n-tm] x2))))))
+      (lam
+          ([x:n-tm]
+              app
+                 (lam
+                     ([x1:n-tm]
+                         app (app (=p= (pi boolean ([x20:n-tm] boolean))) x1)
+                            (lam
+                                ([x2:n-tm]
+                                    app
+                                       (app
+                                           (=p=
+                                               (pi boolean ([x21:n-tm] boolean)))
+                                           (lam ([x3:n-tm] x3)))
+                                       (lam ([x3:n-tm] x3))))))
+                 (lam
+                     ([x1:n-tm]
+                         app (app =p=> (app x x1))
+                            (app x
+                                (app
+                                    (lam
+                                        ([p:n-tm]
+                                            decide
+                                               (app inhabited
+                                                   (set boolean
+                                                       ([x22:n-tm] ^ app p x22)))
+                                               ([x23:n-tm] x23)
+                                               ([x24:n-tm] arb boolean)))
+                                    x))))))) E.
+
+
+%solve d2' : run z (v
+          (eq
+              (lam
+                  ([x:n-tm]
+                      v
+                         (eq
+                             (lam
+                                 ([x1:n-tm]
+                                     if (app x x1)
+                                        (app x
+                                            (decide
+                                                (app inhabited
+                                                    (set boolean
+                                                        ([x22:n-tm] ^ app x x22)))
+                                                ([x23:n-tm] x23)
+                                                ([x24:n-tm] arb boolean)))
+                                        tt))
+                             (lam
+                                 ([x1:n-tm]
+                                     v
+                                        (eq (lam ([x3:n-tm] x3))
+                                            (lam ([x3:n-tm] x3))
+                                            (pi boolean ([x21:n-tm] boolean)))))
+                             (pi boolean ([x20:n-tm] boolean)))))
+              (lam
+                  ([x:n-tm]
+                      v
+                         (eq (lam ([x2:n-tm] x2)) (lam ([x2:n-tm] x2))
+                             (pi boolean ([x19:n-tm] boolean)))))
+              (pi (pi boolean ([x17:n-tm] boolean)) ([x18:n-tm] boolean)))) 
+	      E.
+
+
+%solve d3 : run (s (s (s (s (s (s (s (s (s (s (s (s (s (s (s (s (s (s (s (s z))))))))))))))))))))  (app
+      (lam
+          ([x:n-tm]
+              app (app (=p= (pi boolean ([x17:n-tm] boolean))) x)
+                 (lam
+                     ([x1:n-tm]
+                         app
+                            (app (=p= (pi boolean ([x18:n-tm] boolean)))
+                                (lam ([x2:n-tm] x2)))
+                            (lam ([x2:n-tm] x2))))))
+      (lam
+          ([x:n-tm]
+              app
+                 (lam
+                     ([x1:n-tm]
+                         app (app (=p= (pi boolean ([x19:n-tm] boolean))) x1)
+                            (lam
+                                ([x2:n-tm]
+                                    app
+                                       (app
+                                           (=p=
+                                               (pi boolean ([x20:n-tm] boolean)))
+                                           (lam ([x3:n-tm] x3)))
+                                       (lam ([x3:n-tm] x3))))))
+                 (lam
+                     ([x1:n-tm]
+                         app (app =p=> (app (app =p=> x) x1))
+                            (app (app =p=> (app (app =p=> x1) x))
+                                (app (app (=p= boolean) x) x1))))))) E.
+
+%solve d3' : run z (v
+          (eq
+              (lam
+                  ([x]
+                      v
+                         (eq
+                             (lam
+                                 ([x1]
+                                     if (if x x1 tt)
+                                        (if (if x1 x tt) (v (eq x x1 boolean))
+                                            tt)
+                                        tt))
+                             (lam
+                                 ([x1]
+                                     v
+                                        (eq (lam ([x3] x3))
+                                            (lam ([x3] x3))
+                                            (pi boolean ([x20] boolean)))))
+                             (pi boolean ([x19] boolean)))))
+              (lam
+                  ([x]
+                      v
+                         (eq (lam ([x2] x2)) (lam ([x2] x2))
+                             (pi boolean ([x18] boolean)))))
+              (pi boolean ([x17] boolean)))) E.
+
+
+
+fact :  !- _  !*! (v
+          (eq
+              (lam
+                  ([x]
+                      v
+                         (eq
+                             (lam
+                                 ([x1]
+                                     if (if x x1 tt)
+                                        (if (if x1 x tt) (v (eq x x1 boolean))
+                                            tt)
+                                        tt))
+                             (lam
+                                 ([x1]
+                                     v
+                                        (eq (lam ([x3] x3))
+                                            (lam ([x3] x3))
+                                            (pi boolean ([x20] boolean)))))
+                             (pi boolean ([x19] boolean)))))
+              (lam
+                  ([x]
+                      v
+                         (eq (lam ([x2] x2)) (lam ([x2] x2))
+                             (pi boolean ([x18] boolean)))))
+              (pi boolean ([x17] boolean))))
+          .
+
+%{
+
+ if (if x x1 tt) (if (if x1 x tt) (v (eq x x1 boolean)) tt) tt))
+
+case 1: x = tt , x1 = tt
+
+}%
+% case x = tt, x1 = tt
+%solve d1-1 : run (s (s (s  (s z)))) (if (if tt tt tt) (if (if tt tt tt) (v (eq tt tt boolean)) tt) tt) E.
+% case x = tt, x1 = ff
+%solve d1-2 : run (s (s z)) (if (if tt ff tt) (if (if ff tt tt) (v (eq tt ff boolean)) tt) tt) E.
+% case x = ff, x1 = tt
+%solve d1-3 : run (s (s (s (s z)))) (if (if ff tt tt) (if (if tt ff tt) (v (eq ff tt boolean)) tt) tt) E.
+% case x = ff, x1 = ff
+%solve d1-4 : run (s (s (s (s z)))) (if (if ff ff tt) (if (if ff ff tt) (v (eq ff ff boolean)) tt) tt) E.
+

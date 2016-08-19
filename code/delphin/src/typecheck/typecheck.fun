@@ -57,16 +57,20 @@ structure DelphinTypeCheck : DELPHIN_TYPECHECK =
 	      end
 
       | checkCaseType (G, D.PopC(i, C), Fresult) = 
-	       let
-		 val Gpop = D.popCtx(i, G)
-		 val Fpop = D.newFVar(D.coerceCtx Gpop)
-		 val _ = checkCaseType(Gpop, C, Fpop)
-		 val (D, F) = case (D.whnfF Fpop)
-		                of D.Nabla(D, F) => (D, F)
-			         | _ => fatalError()
+	      let
+		 fun popCtx(0, G) = fatalError()
+		   | popCtx(1, I.Decl(G, D.NonInstantiableDec D)) = (G, D)
+		   | popCtx(1, I.Decl(G, D.InstantiableDec D)) = raise Error ("Delphin Typecheck Error:  Bad Pop")
+		   | popCtx(i, I.Decl(G, _)) = popCtx (i-1, G)
+		   | popCtx _ = fatalError()
+		   
+		 val (Gpop, D) = popCtx (i, G)
+		 val G'' = D.coerceCtx (I.Decl(Gpop, D.NonInstantiableDec D))
+		 val Fnew = D.newFVar(G'')
+		 val Fpop = D.Nabla (D, Fnew)
+		 val _ = unifyF(G, Fresult, D.FClo(Fnew, I.Shift(i-1)))
 
-		 val F' = D.FClo(F, I.Shift (i-1))
-		 val _ = unifyF(G, F', Fresult)
+		 val _ = checkCaseType(Gpop, C, Fpop)
 	       in 
 		 ()
 	       end

@@ -27,14 +27,15 @@ fun ba : <comb A -> comb B> -> <comb (A ar B)>
 	                                 of (<D1'>,<D2'>) => <mp (mp s D1') D2'>)
      | <[x] U> => <mp k U> ;
 
+type paramFun = <D:exp B #> -> <comb B>;
 
-fun convert : _  -> <D:exp A> -> <comb A> =
+fun convert : paramFun  -> <D:exp A> -> <comb A> =
       fn W <lam D'> => (case ({<d>}{<u>} convert (W with <d> => <u>) <D' d>)
 	                                       of ({<d>}{<u>} <D'' u>) => ba <D''>) 
        | W <app D1 D2> => (case ((convert W <D1>), (convert W <D2>))
 	                                      of (<U1>,<U2>) => <mp U1 U2>) 
 	     
-       | W <x#> => W <A> <x>;
+       | W <x#> => W <x>;
 
 val testConvert1 = {<A>} {<B>} convert (fn .) <lam [u:exp A] lam [v:exp B] u> ;
 val testConvert2 = {<A>} convert (fn .)  <lam [x:exp A] x> ;

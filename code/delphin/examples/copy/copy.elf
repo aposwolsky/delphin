@@ -1,0 +1,98 @@
+%%%  Equivalence of single and double eigenvariable 
+%%%  definitions of copy.
+%%% Author: Adam Poswolsky
+%%% Based on a similar proof in Abella by Andrew Gacek (http://abella.cs.umn.edu/examples/copy.html)
+
+exp : type. %name exp E x.
+app : exp -> exp -> exp.
+lam : (exp -> exp) -> exp.
+
+copy : exp -> exp -> type.
+cp_app : copy E1 F1 -> copy E2 F2 -> copy (app E1 E2) (app F1 F2).
+cp_lam : ({x} copy x x -> copy (E x) (F x)) 
+               -> copy (lam [x] E x) (lam [x] F x).
+
+copy2 : exp -> exp -> type.
+cp_app2 : copy2 E1 F1 -> copy2 E2 F2 -> copy2 (app E1 E2) (app F1 F2).
+cp_lam2 : ({x}{y} copy2 x y -> copy2 (E x) (F y)) 
+               -> copy2 (lam [x] E x) (lam [x] F x).
+
+
+%%% We first show that copy implies copy2 
+
+copy2_align : ({x} copy2 x x -> copy2 (E x) (F x)) 
+              -> ({x}{y} copy2 x y -> copy2 (E x) (F y))
+              -> type.
+%mode copy2_align +X1 -X2.
+
+c2alignApp : copy2_align ([x][d] cp_app2 (D1 x d) (D2 x d)) ([x][y][d] cp_app2 (D1' x y d) (D2' x y d))
+	      <- copy2_align D1 D1'
+	      <- copy2_align D2 D2'.
+
+c2alignLam : copy2_align ([x][d] cp_lam2 [x2][y2][d2] (D x d x2 y2 d2)) ([x][y][d] cp_lam2 [x2][y2][d2] (D' x y d x2 y2 d2))
+	      <- ({x2}{y2}{d2} copy2_align ([x][d] D x d x2 y2 d2) ([x][y][d] D' x y d x2 y2 d2)).
+
+c2alignBase : copy2_align ([x][d:copy2 x x] d) ([x][y][d:copy2 x y] d).
+
+c2alignParam : copy2_align ([x] [d] U) ([x][y][d] U).
+
+
+copy_to_copy2 : (copy E F) -> (copy2 E F) -> type.
+%mode copy_to_copy2 +X1 -X2.
+
+toCopy2App : copy_to_copy2 (cp_app D1 D2) (cp_app2 D1' D2')
+	      <- copy_to_copy2 D1 D1'
+	      <- copy_to_copy2 D2 D2'.
+
+toCopy2Lam : copy_to_copy2 (cp_lam D) (cp_lam2 D'')
+    <- ({x}{d:copy x x}{d2 : copy2 x x} (copy_to_copy2 d d2) -> copy_to_copy2 (D x d) (D' x d2))
+    <- copy2_align D' D''.
+
+%block ctx1 : block {x:exp}{y:exp}{d:copy2 x y}.
+%block ctx2 : block {x:exp}{d:copy x x}{d2:copy2 x x}{u:copy_to_copy2 d d2}.
+
+%worlds (ctx1 | ctx2) (copy2_align X1 X2).
+%total {X1} (copy2_align X1 _).
+
+%worlds (ctx2) (copy_to_copy2 X1 X2).
+%total {X1} (copy_to_copy2 X1 _).
+
+
+%%% We next show that copy2 implies copy
+
+copy_align : ({x}{y} copy x y -> copy (E x) (F y)) 
+              -> ({x} copy x x -> copy (E x) (F x))
+              -> type.
+%mode copy_align +X1 -X2.
+
+c_alignApp : copy_align ([x][y][d] cp_app (D1 x y d) (D2 x y d)) ([x][d] cp_app (D1' x d) (D2' x d))
+	      <- copy_align D1 D1'
+	      <- copy_align D2 D2'.
+
+c_alignLam : copy_align ([x][y][d] cp_lam [x2][d2] (D x y d x2 d2)) ([x][d] cp_lam [x2][d2] (D' x d x2 d2))
+	      <- ({x2}{d2} copy_align ([x][y][d] D x y d x2 d2) ([x][d] D' x d x2 d2)).
+
+c_alignBase : copy_align ([x][y][d:copy x y] d) ([x][d:copy x x] d).
+
+c_alignParam : copy_align ([x][y][d] U) ([x][d] U).
+
+
+copy2_to_copy : (copy2 E F) -> (copy E F) -> type.
+%mode copy2_to_copy +X1 -X2.
+
+toCopyApp : copy2_to_copy (cp_app2 D1 D2) (cp_app D1' D2')
+	      <- copy2_to_copy D1 D1'
+	      <- copy2_to_copy D2 D2'.
+
+toCopyLam : copy2_to_copy (cp_lam2 D) (cp_lam D'')
+    <- ({x}{y}{d:copy2 x y}{d2 : copy x y} (copy2_to_copy d d2) -> copy2_to_copy (D x y d) (D' x y d2))
+    <- copy_align D' D''.
+
+%block ctx1' : block {x:exp}{d:copy x x}.
+%block ctx2' : block {x:exp}{y:exp}{d:copy2 x y}{d2:copy x y}{u:copy2_to_copy d d2}.
+
+%worlds (ctx1' | ctx2') (copy_align X1 X2).
+%total {X1} (copy_align X1 _).
+
+%worlds (ctx2') (copy2_to_copy X1 X2).
+%total {X1} (copy2_to_copy X1 _).

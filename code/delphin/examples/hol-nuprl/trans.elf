@@ -32,8 +32,8 @@ trans@ : transtm ((H :tm (B arr A)) @ (G:tm B)) (app T S)
 	  <- transtm H T.
 
 trans\ : transtm (\ H : tm (A arr B)) (lam M)
-	  <- ({x:tm _}{y:n-tm} transtm x y -> transtm (H x) (M y))
-	  <- transtp A _.
+	  <- ({x:tm A}{y:n-tm} transtm x y -> transtm (H x) (M y)).
+
 
 
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -45,9 +45,8 @@ transsen : tm o -> n-tm -> type.	%mode transsen +A -N.
 t-base : transsen H (^ M)
 	  <- transtm H M.
 
-
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Translation of HOL theory of Booleans  
+% Translation of HOL theory of Booleans  ml
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 

@@ -1,0 +1,86 @@
+% The HOL-Nuprl connection.
+% A formalziation of HOL.
+% Author: Carsten Schuermann, Mark-Oliver Stehr.
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Types
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+tp : type.				
+
+arr : tp -> tp -> tp.			%infix right 10 arr.
+
+o  : tp.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Terms
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+tm : tp -> type.			
+
+=>: tm (o arr o arr o).
+
+== : tm (A arr A arr o).
+
+@ : tm (A arr B) -> tm A -> tm B.	%infix left 15 @.
+
+\ : (tm A -> tm B) -> tm (A arr B).  
+
+==> = [H:tm o] [G:tm o] => @ H @ G.	%infix right 13 ==>.
+
+=== = [H:tm A] [G:tm A] == @ H @ G.	%infix left 14 ===.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+|-    : tm o -> type.			%prefix 10 |-. 
+                                        
+
+mp    : |- H -> |- H ==> G -> |- G.
+
+disch : (|- H -> |- G) -> |- H ==> G.
+
+refl  : |- H === H. 
+
+beta  : |- (\ H) @ G === (H G).
+
+sub   : {G:tm A -> tm o} |- H1 === H2 -> |- G H1 -> |- G H2.
+
+abs   : |- \ H === \ G 
+	 <- ({x} |- H x === G x).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Booleans
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+bool  = o.
+
+true  : tm bool.
+all|  : tm ((A arr bool) arr bool).
+all   = [P] all| @ P.
+false : tm bool.
+neg   : tm (bool arr bool).
+/|\   : tm (bool arr bool arr bool).	
+/\    = [P] [Q] /|\ @ P @ Q.		%infix right 12 /\.
+\|/   : tm (bool arr bool arr bool).	
+\/    = [P] [Q] \|/ @ P @ Q.		%infix right 11 \/.
+the|  : tm ((A arr bool) arr A).
+the   = [P] the| @ P.
+ex|   : tm ((A arr bool) arr bool).
+ex    = [P] ex| @ P.
+
+
+bool-cases-ax  : |- all (\ [x:tm bool] x === true \/ x === false).
+select-ax      : {A:tp}|- all (\ [P:tm (A arr bool)]  all (\ [x] P @ x ==>  P @ (the P))).
+imp-antisym-ax : |- all (\ [x:tm bool] 
+                           all (\ [y:tm bool] 
+                                  (x ==> y) ==> (y ==> x) ==> x === y)).
+
+

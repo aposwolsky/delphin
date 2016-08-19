@@ -661,7 +661,8 @@ structure DelphinCoverage =
 		 | _ => occursSpine (p, (S, I.id)))
 	  | occursLF_ExpW (p, (I.EVar(r, G, A, cnstrs), s)) =
 		   (* A makes sense with respect to Gglobal, G *)
-		   occursLF_Exp (I.ctxLength G, (A, s))
+		   (* WRONG:  occursLF_Exp (I.ctxLength G, (A, s)) *)
+		   occursLF_Exp (I.ctxLength G, (A, I.id))
 	  | occursLF_ExpW (p, Us (* anything else *) ) = false (* not in Delphin (i.e. fgnexp) *)
 
 	and occursLF_Dec (p, (I.Dec (_, V), s)) =
@@ -1022,90 +1023,6 @@ structure DelphinCoverage =
 			   )
 
 
-
-    (* Precondition:  Glocal only contains NonInstantiableDecs *)
-    (* sc is a continuation executed on EVERY possibility *)
-    (* very similar to generateEVar except it only gets one case..
-     * used in convert.fun in creating functions "W with ..."
-     *)
-    fun generateEVarFirstCase (Gglobal, Glocal, D.NormalDec(_, D.LF(isP, A)), sc) = 
-         (case (D.whnfP isP)
-	    of (D.Existential) => 
-                let
-		  val M = D.Quote(generateLF_EVar (D.coerceCtx Gglobal, D.coerceCtx Glocal, A, fn U => U))
-		in
-		  sc M
-		end
-
-	     | (D.Param) =>		
-		         (* Case (1)..*)
-		         let 
-			   val sizeG = I.ctxLength Glocal
-			     
-			   fun inverse(0) = I.id
-			     | inverse(n) = I.Dot(I.Undef, inverse(n-1))
-			     
-			   val t = inverse sizeG  (*  .  |- t : Glocal *)
-
-
-			   fun getResult () = 
-			     let
-			       val Aopt' = SOME(U.LFapplyInv2Exp (true (* pruning on or off??? *), D.coerceCtx Gglobal, D.coerceCtx Glocal, A, t)) (*  EVars are only raised up to Glocal *)
-				 handle U.Error _ => NONE
-			     in
-			       case Aopt' of 
-			                   NONE => raise CoverageError "Cannot generate case"
-					 | SOME A' => sc (D.Var (D.BVarLF ((ref NONE, A',D.makeLFParamList Gglobal, ref nil), I.Shift sizeG), NONE))
-			     end
-
-			 in
-			   removeSideEffects getResult
-			 end
-            | _ => crash())
-
-
-
-      | generateEVarFirstCase (Gglobal, Glocal, D.NormalDec(_, D.Meta(F)), sc) = 
-		(case (D.whnfF F)
-		   of D.Top => sc (D.Unit)
-		    | D.Exists (D', F') => generateEVarFirstCase (Gglobal, Glocal, D',
-						       fn E1 => generateEVarFirstCase(Gglobal, Glocal, 
-									    D.NormalDec(NONE,D.Meta(D.FClo(F', D.coerceSub (D.Dot(D.Prg E1 , D.id))))),
-									    fn E2 => sc (D.Pair (E1, E2, F))))
-
-		    | D.Nabla (D', F') => generateEVarFirstCase (Gglobal, I.Decl(Glocal, D.NonInstantiableDec D'), 
-						      D.NormalDec(NONE, D.Meta(F')),
-						      fn E => sc (D.New(D', E, NONE)))
-		    | D.FVar _ => crash()
-		    | D.FClo _ => crash()
-		    | D.FormList _ => crash()
-		    | D.All _ =>
-		             (* Create a value:  (x \Glocal)
-			      * so x has type : Nabla Glocal. F
-			      *)
-		             let
-			       fun raiseType (I.Null, F) = F
-				 | raiseType (I.Decl(G, D.NonInstantiableDec D), F) = raiseType(G, D.Nabla(D, F))
-				 | raiseType _ = crash() (* broken invariant.. .Glocal only contains NonInstantiableDecs.. *)
-
-			       val X = D.newEVar (raiseType (Glocal, F))
-
-			       (* compute E \G 
-				* i.e.  E \(x,y) == (E \x) \y
-				*)
-			       fun popCtx (I.Null, E) = E 
-				 | popCtx (I.Decl(G, D.NonInstantiableDec D), E) = D.Pop(1, popCtx(G, E), NONE)
-				 | popCtx _ = crash() (* broken invariant *)
-				 
-			       val E = popCtx (Glocal, X)
-			     in
-			       sc E
-			     end
-			   )
-
-
-
-
     (* reduceCase (Gglobal, G, C) = C'
      * where C' is filled in with appropriate EVars such that C' is of the form
      * has no epsilons, pops, and ends with "Unit"
@@ -1409,7 +1326,13 @@ structure DelphinCoverage =
 	 in
 	   split (selection, G, goal, Clist, missing)
 	 end
-       
+
+(* OLD way of splitting lowest index first may cause coverage-checking to generate
+ * thousands of cases... Thereforew, we now try splitting all candidates and choose the one
+ * with the fewest goals.
+ * 
+ * OLD CODE FOLLOWS:
+
     and split(NONE, G, goal, Clist, missing) = missing (* goal is covered! *)
       | split(SOME(nil), G, goal, Clist, missing) = 
            splitWeak(finitary(G, goal), G, goal, Clist, missing)   
@@ -1439,10 +1362,106 @@ structure DelphinCoverage =
 
 	    in
               (* commit to the minimal candidate, since no constraints can arise .
-	       * NOT TRUE--ABP. I had to change finitary to check that no contraints arise.
+	       * NOT TRUE--ABP. I had to change finitary to check that no constraints arise.
 	       *)
               split (SOME(findMin ksn::nil), G, goal, Clist, missing)
 	    end
+  * END OF OLD CODE
+  *)
+
+   and splitAll(ksn, G, goal) =
+       let
+	 fun processAll [] = []
+	   | processAll ((k,_)::ks) = (case (splitVar (k, G, goal))
+	                              of NONE => processAll ks
+				       | SOME goals => (k, ref true, goals) :: (processAll ks))	  
+
+	 val successfulSplits = processAll ksn
+
+	 (* successfulSplits contains a reference to a bool indicating whether
+	  * it is still under consideration.  We will update this to 
+	  * throw out splitting candidates that are indexed in other
+	  * splitting candidates, as splitting the latter would also refine
+          * the former.
+          *)
+	 fun disableIndex k =
+	   let
+	     fun disableIndex' (k, []) = ()
+	       | disableIndex' (k, ((k2:int), b, _)::ks) = if (k = k2) then (b := false)
+	                                              else disableIndex' (k, ks)
+	   in
+	     disableIndex' (k, successfulSplits)
+	   end
+
+	 fun getLocalCtx (G, D.Eps(D, C, fileInfo)) = getLocalCtx (I.Decl(G, D.InstantiableDec D), C)
+	   | getLocalCtx (G, C) = G
+
+	 val Glocal = getLocalCtx(I.Null, goal)
+
+	 fun processOccursLF_Exp (offset, Us) = processOccursLF_ExpW (offset, Whnf.whnf Us)
+	 and processOccursLF_ExpW (_, (I.Uni _, _)) = ()
+	   | processOccursLF_ExpW (offset, (I.Lam (D, U), s)) =
+               (processOccursLF_Dec(offset, (D, s)) ;
+	        processOccursLF_Exp (offset+1, (U, I.dot1 s)))
+	   | processOccursLF_ExpW (offset, (I.Pi ((D', _), U), s)) =
+	       (processOccursLF_Dec (offset, (D', s));
+		processOccursLF_Exp (offset+1, (U, I.dot1 s)))
+	   | processOccursLF_ExpW (offset, (I.Root (H, S), _(* id *) )) =
+	        (case H
+		   of (I.BVar (I.Fixed k')) => (disableIndex (k' - offset) ; processOccursSpine (offset, (S, I.id)))
+  		    | I.BVar (I.BVarVar ((r, A, list, cnstrs), s)) => 
+                            (processOccursLF_Exp(offset, (A, s));
+			     processOccursSpine(offset, (S, I.id)))
+		    | _ => processOccursSpine (offset, (S, I.id)))
+	   | processOccursLF_ExpW (offset, (I.EVar(r, G, A, cnstrs), s)) =
+		   (* A makes sense with respect to Gglobal, G *)
+		   processOccursLF_Exp (offset, (A, s))
+	   | processOccursLF_ExpW (offset, Us (* anything else *) ) = () (* not in Delphin (i.e. fgnexp) *)
+
+	 and processOccursLF_Dec (offset, (I.Dec (_, V), s)) =
+		    processOccursLF_Exp (offset, (V, s))
+	   | processOccursLF_Dec _ = crash() (* unexpected dec *)
+
+	 and processOccursSpine (_, (I.Nil, _)) = ()
+	   | processOccursSpine (offset, (I.App (U, S), s)) = 
+		    (processOccursLF_Exp (offset, (U, s)); processOccursSpine (offset, (S, s)))
+	   | processOccursSpine (offset, (I.SClo (S, s'), s)) = processOccursSpine (offset, (S, I.comp(s', s)))
+
+	 fun processCandidate (k, _, _) =
+	     (case (I.ctxLookup (Glocal, k))
+		of (D.InstantiableDec (D.NormalDec (_, D.LF (_, A)))) => processOccursLF_Exp (0, (A, I.Shift k))
+		 | _ => ()
+	     )
+
+	 val _ = map processCandidate successfulSplits
+
+	 (* We will pick the one that results in the fewest number of goals *)
+	 fun findSmallest (currentSmallest, []) = currentSmallest
+	   | findSmallest (currentSmallest, (_, ref false, _)::xs) = findSmallest(currentSmallest, xs)
+	   | findSmallest (NONE, (_, ref true, goals)::xs) = findSmallest(SOME goals, xs)
+	   | findSmallest (SOME goalsSmallest, (_, ref true, goals)::xs) = 
+	               if ((List.length goals) < (List.length goalsSmallest)) 
+			 then findSmallest(SOME goals, xs)
+		       else findSmallest(SOME goalsSmallest, xs)
+       in
+	  findSmallest (NONE, successfulSplits)
+       end
+
+   (* We now try splitting all candidates and pick the one that results
+    * in the fewest number of cases.
+    *)
+    and split(NONE, G, goal, Clist, missing) = missing (* goal is covered! *)
+      | split(SOME (ksn), G, goal, Clist, missing) =
+	     (case (splitAll(ksn, G, goal))
+		of SOME(goals) => covers(G, goals, Clist, missing)
+	        | NONE => splitWeak(finitary(G, goal), G, goal, Clist, missing))
+
+
+
+    and splitWeak (ksn, G, goal, Clist, missing) = 
+	     (case (splitAll(ksn, G, goal))
+		of SOME(goals) => covers(G, goals, Clist, missing)
+	        | NONE => goal :: missing)
 
 
 
@@ -1482,8 +1501,14 @@ structure DelphinCoverage =
     (* Main Function ... *)
     (* ***************************************************************************************************************** *)
     (* ***************************************************************************************************************** *)
+    fun check(smartInj, printEps, G, E) =
+      let
+	val errorList : string list ref  = ref []
 
-    fun checkCases(smartInj, printEps, G, Clist, F) = 
+	fun addError(s) = (errorList := !errorList @ [s])
+
+
+	fun checkCases(G, Clist, F, fileInfo) = 
             let	      
 	      (* ABP WARNING:  We need to check that everything in G is named..
 	       * otherwise it will print some names as "?" ..
@@ -1498,26 +1523,34 @@ structure DelphinCoverage =
 	    in
 	      case missing 
 		        of nil => ()
-			 | _ => (raise CoverageError (goalsToString(smartInj, printEps, G, missing)))
+			 | _ => 
+			        let
+                                   val s = goalsToString(smartInj, printEps, G, missing) (* error details *)
+				   val msg = "WARNING:  Match Non-Exhaustive Warning:\n" ^ s ^ "\n"
+			        in
+				   case fileInfo
+				     of NONE => addError msg
+				      | SOME(filename, r) => addError (Paths.wrapLoc(Paths.Loc (filename, r), msg))
+			        end 
 	    end
 
 
-    (* Invariant:  no PopCs *)
-    fun checkCaseBody(smartInj, printEps, G, D.Eps(D, C, fileInfo)) = 
-                 checkCaseBody(smartInj, printEps, I.Decl(G, D.InstantiableDec D), C)
-      | checkCaseBody(smartInj, printEps, G, D.NewC(D, C, fileInfo)) = 
-		 checkCaseBody(smartInj, printEps, I.Decl(G, D.NonInstantiableDec D), C)
-      | checkCaseBody(smartInj, printEps, G, D.Match(pats, Ebody)) = 
-		 checkCovers(smartInj, printEps, G, Ebody)
-      | checkCaseBody(smartInj, printEps, G, D.PopC _) = crash() (* broken invariant.. no PopCs..*)
+	(* Invariant:  no PopCs *)
+	fun checkCaseBody(G, D.Eps(D, C, fileInfo)) = 
+                 checkCaseBody(I.Decl(G, D.InstantiableDec D), C)
+	  | checkCaseBody(G, D.NewC(D, C, fileInfo)) = 
+		 checkCaseBody(I.Decl(G, D.NonInstantiableDec D), C)
+	  | checkCaseBody(G, D.Match(pats, Ebody)) = 
+		 checkCovers(G, Ebody)
+	  | checkCaseBody(G, D.PopC _) = crash() (* broken invariant.. no PopCs..*)
 
 
-    and checkCovers(smartInj, printEps, G, E) = checkCoversW(smartInj, printEps, G, D.whnfE E)
-    and checkCoversW(smartInj, printEps, G, D.Var _) = ()
-      | checkCoversW(smartInj, printEps, G, D.Quote _) = ()
-      | checkCoversW(smartInj, printEps, G, D.Unit) = ()
+	and checkCovers(G, E) = checkCoversW(G, D.whnfE E)
+	and checkCoversW(G, D.Var _) = ()
+	  | checkCoversW(G, D.Quote _) = ()
+	  | checkCoversW(G, D.Unit) = ()
 
-      | checkCoversW(smartInj, printEps, G, D.Lam (Clist as (D.PopC(i, _)::_), F, fileInfo)) =
+	  | checkCoversW(G, D.Lam (Clist as (D.PopC(i, _)::_), F, fileInfo)) =
 				let
 				  fun movePopOutside (D.PopC(j, C')) = if (i = j) then C' else crash() (* broken invariant *)
 				    | movePopOutside _ = crash() (* broken invariant *)
@@ -1534,90 +1567,71 @@ structure DelphinCoverage =
 				  val G'' = D.coerceCtx (I.Decl(G', D.NonInstantiableDec D))
 				  val Fnew = D.newFVar(G'')
 				  val F' = D.Nabla (D, Fnew)
-				  val _ = U.unifyF(I.Null, G'', F, D.FClo(Fnew, I.Shift(i-1)))
+				  val _ = U.unifyF(I.Null, D.coerceCtx G, F, D.FClo(Fnew, I.Shift(i-1)))
 				    handle U.Error msg => case fileInfo
 				                          of SOME (filename, r) => raise CoverageError (Paths.wrapLoc (Paths.Loc (filename, r), ("CoverageChecker Failed UNEXPECTEDLY (" ^ msg ^ ")"))) (* should never fail! *)
 							   | _ => raise CoverageError ("CoverageChecker Failed UNEXPECTEDLY (" ^ msg ^ ")") (* should never fail! *)
 				in
-				  checkCovers (smartInj, printEps, G,  D.Pop (i, D.Lam (Clist', F', fileInfo), fileInfo))
+				  checkCovers (G,  D.Pop (i, D.Lam (Clist', F', fileInfo), fileInfo))
 				end
 
 
-      | checkCoversW(smartInj, printEps, G, D.Lam (Clist (* and no cases have PopC *), F, fileInfo)) = 
+	  | checkCoversW(G, D.Lam (Clist (* and no cases have PopC *), F, fileInfo)) = 
                                         let
-					  val _ = (checkCases(smartInj, printEps, G, Clist, F)
-                                                   handle CoverageError s => 
-							      let 
-								val msg = "WARNING:  Match Non-Exhaustive Warning:\n" ^ s ^ "\n"
-							      in
-								case fileInfo
-								  of NONE => raise CoverageError msg
-								   | SOME(filename, r) => raise CoverageError (Paths.wrapLoc(Paths.Loc (filename, r), msg))
-							      end )
-					  val _ = map (fn C => checkCaseBody(smartInj, printEps, G, C)) Clist
+					  val _ = checkCases(G, Clist, F, fileInfo)
+					  val _ = map (fn C => checkCaseBody(G, C)) Clist
 					in
 					  ()
 					end
 
-      | checkCoversW(smartInj, printEps, G, D.New (D, E, _)) = 
-				checkCovers(smartInj, printEps, I.Decl(G, D.NonInstantiableDec D), E)
+	  | checkCoversW(G, D.New (D, E, _)) = 
+				checkCovers(I.Decl(G, D.NonInstantiableDec D), E)
 
-      | checkCoversW(smartInj, printEps, G, D.App (E1, args)) =  
-				(checkCovers(smartInj, printEps, G, E1) ; checkCoversArgs(smartInj, printEps, G, args))
+	  | checkCoversW(G, D.App (E1, args)) =  
+				(checkCovers(G, E1) ; checkCoversArgs(G, args))
 
-      | checkCoversW(smartInj, printEps, G, D.Pair (E1, E2, _)) = 
-				(checkCovers(smartInj, printEps, G, E1) ; checkCovers(smartInj, printEps, G, E2))
+	  | checkCoversW(G, D.Pair (E1, E2, _)) = 
+				(checkCovers(G, E1) ; checkCovers(G, E2))
 
-      | checkCoversW(smartInj, printEps, G, D.ExpList Elist) = 
+	  | checkCoversW(G, D.ExpList Elist) = 
 		       let
-			 (* Even if it gets an error, we want to continue on all parts and accumulate the error messages. 
-			  * i.e. we want to run the coverage-checker on all mutually recursive functions, even
-			  * if one fails.
-			  *)
-			  fun run([], errorList) = errorList
-			    | run(E::Elist, errorList) = 
-			         let
-				   val errorList' = 
-				     (checkCovers(smartInj, printEps, G, E) ; errorList)
-				     handle CoverageError s => errorList @ [s]
-				 in
-				   run(Elist, errorList')
-				 end
-
-			  fun listToString [] = ""
-			    | listToString (s::ss) = s ^ (listToString ss)
+			 val _ = map (fn E => checkCovers(G, E)) Elist
 		       in
-			 case (run(Elist, []))
-			   of [] => ()
-			    | sList => raise CoverageError (listToString sList)
+			 ()
 		       end
 
-      (* OLD
-      | checkCoversW(smartInj, printEps, G, D.ExpList []) = ()
+	  | checkCoversW(G, D.Proj (E, i)) = 
+				checkCovers(G, E)
 
-      | checkCoversW(smartInj, printEps, G, D.ExpList (E::Elist)) = 
-				(checkCovers(smartInj, printEps, G, E) ; checkCovers(smartInj, printEps, G, D.ExpList Elist))
-      *)
+	  | checkCoversW(G, D.Pop (i, E, fileInfo)) = 
+				checkCovers(D.popCtx(i, G), E)
 
-      | checkCoversW(smartInj, printEps, G, D.Proj (E, i)) = 
-				checkCovers(smartInj, printEps, G, E)
+	  | checkCoversW(G, D.Fix (D, E)) = 
+				checkCovers(I.Decl(G, D.InstantiableDec D), E)
 
-      | checkCoversW(smartInj, printEps, G, D.Pop (i, E, fileInfo)) = 
-				checkCovers(smartInj, printEps, D.popCtx(i, G), E)
+	  | checkCoversW(G, D.EVar r (* ref NONE *)) = ()
 
-      | checkCoversW(smartInj, printEps, G, D.Fix (D, E)) = 
-				checkCovers(smartInj, printEps, I.Decl(G, D.InstantiableDec D), E)
-
-      | checkCoversW(smartInj, printEps, G, D.EVar r (* ref NONE *)) = ()
-
-      | checkCoversW(smartInj, printEps, G, D.EClo _) = crash() (* impossible by whnf *)
+	  | checkCoversW(G, D.EClo _) = crash() (* impossible by whnf *)
 
 
 
-    and checkCoversArgs(smartInj, printEps, G, []) = ()
+	and checkCoversArgs(G, []) = ()
 
-      | checkCoversArgs(smartInj, printEps, G, (vis, fileInfo, E)::args) = 
-                 (checkCovers(smartInj, printEps, G, E) ; checkCoversArgs (smartInj, printEps, G, args))
+	  | checkCoversArgs(G, (vis, fileInfo, E)::args) = 
+                 (checkCovers(G, E) ; checkCoversArgs (G, args))
+
+	fun listToString [] = ""
+	  | listToString (s::ss) = s ^ (* "\n" ^ *)  (listToString ss)
+
+        (* Run the coverage checker *)
+	val _ = checkCovers(G, E)
+
+      in
+	case (!errorList)
+	  of [] => ()
+	   | sList => raise CoverageError (listToString sList)
+
+      end
 
 
   end

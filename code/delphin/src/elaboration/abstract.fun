@@ -1079,16 +1079,20 @@ fun LFcollectExp (reg, depthStart, (U, s), K, allowVars) =
     (* EVars/FVars are turned into epsilon-bound pattern variables *)
     fun transformC depth Kinitial (D.Match (r, pats, E2)) =
            let
+	     val depth' = case depth
+		             of NONE => NONE
+			      | SOME(global, _) => SOME(global, 0)
+
 	     fun transformPats ([], K) = ([], K)
 	       | transformPats ((vis, E1)::pats, K) =
 	             let
-		       val (E1', K') = transformDelExp(depth, E1, K, true)
+		       val (E1', K') = transformDelExp(depth', E1, K, true)
 		       val (pats', K'') = transformPats (pats, K')
 		     in
 		       ((vis, E1')::pats', K'')
 		     end
 	     val (pats', K0) = transformPats (pats, Kinitial)
-	     val (E2', K) = transformDelExp(depth, E2, K0, false)
+	     val (E2', K) = transformDelExp(depth', E2, K0, false)
 	     val C' = D.Match(r, pats', E2')
 	     val K' = ctxRemovePrefix(I.ctxLength Kinitial, K)  (* K = Kinitial,K' *)
 	     val K' = transformK K' (* Move meta-level to the end *)
@@ -1105,8 +1109,12 @@ fun LFcollectExp (reg, depthStart, (U, s), K, allowVars) =
 
       | transformC depth Kinitial (D.Eps (r, D, C)) = 
 	   let
-	     val K = collectDelNormalDec(depth, D, Kinitial, true)
-	     val C' = D.Eps(r, D, transformC (addOne depth) K C)
+	     val depth' = case depth
+		             of NONE => NONE
+			      | SOME(global, _) => SOME(global, 0)
+
+	     val K = collectDelNormalDec(depth', D, Kinitial, true)
+	     val C' = D.Eps(r, D, transformC (addOne depth') K C)
 	       
 	     val K' = ctxRemovePrefix(I.ctxLength Kinitial, K)  (* K = Kinitial,K' *)
 	     val K' = transformK K' (* Move meta-level to the end *)
@@ -1134,7 +1142,11 @@ fun LFcollectExp (reg, depthStart, (U, s), K, allowVars) =
 	     (* We want to collect all variables to the LEFT of NewC
 	      * so we call transformDelCaseBranch which transforms and collects a list of variables to abstract
 	      *)
-	     val (C', K) = transformDelCaseBranch(depth, C, Kinitial) (* allowVars = true *)
+	     val depth' = case depth
+		             of NONE => NONE
+			      | SOME(global, _) => SOME(global, 0)
+
+	     val (C', K) = transformDelCaseBranch(depth', C, Kinitial) (* allowVars = true *)
 	     val K' = ctxRemovePrefix(I.ctxLength Kinitial, K)  (* K = Kinitial,K' *)
 	     val K' = transformK K' (* Move meta-level to the end *)
 	     val _ = checkConstraints K'
@@ -1148,23 +1160,6 @@ fun LFcollectExp (reg, depthStart, (U, s), K, allowVars) =
 	   end
 		      
 
-
-	 (* OLD
-         fun transformC C =
-	   let
-	     val (C', K) = transformDelCaseBranch(C, Kinitial) (* allowVars = true *)
-	     val K' = ctxRemovePrefix(I.ctxLength Kinitial, K)  (* K = Kinitial,K' *)
-	     val K' = transformK K' (* Move meta-level to the end *)
-	     val _ = checkConstraints K'
-	     val n = I.ctxLength K'
-	     val C2 = D.substCase(C', D.shift n)
-	     (* G, {{K'}} |- C2 *)
-	     val C3 = abstractDelCaseBranch (K', 0, C2)
-	     val C4 = abstractKEps(K', C3, n-1)
-	   in
-	     C4
-	   end
-            *)		 
 
     and transformDelExp (depth, E as D.VarInt _, K, allowVars) = (E, K)
       | transformDelExp (depth, E as D.Quote (r,U,A,I,isP), K, allowVars) = 
@@ -1182,11 +1177,7 @@ fun LFcollectExp (reg, depthStart, (U, s), K, allowVars) =
       | transformDelExp (depth, E as D.Unit _, K, allowVars) = (E, K)
       | transformDelExp (depth, D.Lam (isSugar, r, Clist, Fopt), Kinitial, allowVars) = 
 	      let
-		val depth' = case depth
-		             of NONE => NONE
-			      | SOME(global, _) => SOME(global, 0)
-
-		val Clist' = map (transformC depth'  Kinitial) Clist 
+		val Clist' = map (transformC depth  Kinitial) Clist 
 	      in
 		(D.Lam (isSugar, r, Clist', NONE), Kinitial)
 	      end
@@ -1417,15 +1408,16 @@ fun LFcollectExp (reg, depthStart, (U, s), K, allowVars) =
 
    
     (* Precondition:  G (which E makes sense) has no Vars *)
-    fun abstractPatVarsExp (r, E, T as D.LF _) =
+    fun abstractPatVarsExp (r, E, T as D.LF _, allowImplicitFun) =
            let
 	     val (E', K (* I.Null *) ) = transformDelExp (SOME (0,0), E, I.Null, false)
 	   in
 	     E'
 	   end
 
-      | abstractPatVarsExp (r, E, T as D.Meta _) =
-           let
+        | abstractPatVarsExp (r, E, T as D.Meta _, true (* allow implicit function *) ) =
+	   let
+	     (* creates an implicit function on all the free variables in T *)
 	     val K = collectDelTypes(SOME(0,0), T, I.Null, true)
 	   in
 	      case transformDelExp(SOME (0,0), E, K, false)
@@ -1459,6 +1451,17 @@ fun LFcollectExp (reg, depthStart, (U, s), K, allowVars) =
 		     D.Lam(false (* not sugar *), r, [C], NONE)
 		   end
 	   end
+
+      | abstractPatVarsExp (r, E, T as D.Meta _, false (* no implicit function generation *) ) =
+           let
+	     val K = collectDelTypes(SOME(0,0), T, I.Null, false (* do not allow *))
+	   in
+	      case transformDelExp(SOME (0,0), E, K, false)
+	         of (E', I.Null) => E'
+		  | (E', Ktotal as I.Decl(_, _)) => raise Domain (* we did not allow abstraction 
+								  of vars, so this is impossible *)
+	   end
+
       
 
 
@@ -1469,38 +1472,41 @@ fun LFcollectExp (reg, depthStart, (U, s), K, allowVars) =
 		 funList'
 	       end
 
-    (* OLD.. this would just put all implicit arguments to the front..
-     * instead we now put them closest to where they belong.
-    fun addImplicitTypesForm (F, Kinitial) = 
-               let
-		 val K' = collectDelFormula(SOME 0, F, Kinitial, true)
-		 val K = ctxRemovePrefix(I.ctxLength Kinitial, K') (* K' = Kinitial, K *)
-		 val _ = checkConstraints K
-		 val n = I.ctxLength K
-		 val F2 = D.substF (F, I.Shift n)
-		 (* G, {{K}} |- F2 *)
-		 val F3 = abstractDelFormula (K, 0, F2)
-		 val Fnew = abstractKAll(K, F3, n-1)
-	       in
-		 Fnew
-	       end
-     *)
 
 
     fun transformDelFormula (depth, F as D.Top _, K, allowVars) = (F, K)
-      | transformDelFormula (depth, D.All(r, Ds, F), Kinitial, allowVars) = 
+      | transformDelFormula (depth, D.All(r, [], F), Kinitial, allowVars) = 
               let
-		fun collectList ([], K, d) = (K, d)
-		  | collectList ((vis, D)::Ds, K, d) = 
-		       let
-			 val K' = collectDelNormalDec(d, D, K, allowVars)
-		       in
-			 collectList (Ds, K', addOne d)
-		       end
+		val depth' = case depth
+		             of NONE => NONE
+			      | SOME(global, _) => SOME(global, 0)
 
-		val (K', depth') = collectList (Ds, Kinitial, depth)
-		val (F', K') = transformDelFormula (depth', F, K', allowVars)
-		val F' = D.All(r, Ds, F') 
+		val (F', K') = transformDelFormula(depth', F, Kinitial, allowVars)
+		val F' = D.All(r, [], F')
+		(* Now remove everything in K' that was added to Kinitial *)
+		val K = ctxRemovePrefix(I.ctxLength Kinitial, K') (* K' = Kinitial, K *)
+		val _ = checkConstraints K
+		val n = I.ctxLength K
+		val F2 = D.substF (F', I.Shift n)
+		(* G, {{K}} |- F2 *)
+		val F3 = abstractDelFormula (K, 0, F2)
+		val Fnew = abstractKAll(K, F3, n-1)
+	      in
+		(Fnew, Kinitial)
+	      end
+		 
+
+      | transformDelFormula (depth, D.All(r, (vis,D)::Ds, F), Kinitial, allowVars) = 
+              let
+		val K' = collectDelNormalDec(depth, D, Kinitial, allowVars)
+		val depth' = case depth
+		             of NONE => NONE
+			      | SOME(global, _) => SOME(global, 0)
+
+		val (F', K') = transformDelFormula(depth', D.All(r, Ds, F), K', allowVars)
+		val F' = (case F'
+		         of D.All(r, Ds', F') => D.All(r, (vis,D)::Ds', F') (* put D as an argument *)
+			  | _ => crash())
 
 		(* Now remove everything in K' that was added to Kinitial *)
 		val K = ctxRemovePrefix(I.ctxLength Kinitial, K') (* K' = Kinitial, K *)

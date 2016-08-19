@@ -38,6 +38,17 @@ symm : !- _ !*! nall (uni 1) [t]  nall t [x] nall t [y] eq x y t =n=> eq y x t
 	      subst' ([_][w2] equality-form v1 w2 u) (ax-elim w1) (ax-intro v1).
 
 
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lemma [Generalized Axiom] :
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+genax: !- T !*! uni 1 -> !- M !*! T -> !- eq N M T -> !- (axiom !*! eq N M T)
+     = [u:!- T !*! uni 1] [w:!- M !*! T] [v:!- eq N M T] 
+	subst ([x:n-tm][y:!- x !*! T] 
+		 equality-form w y u) v (ax-intro w).
+
+
+
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Fact 1 : If ff = tt then exists a term P, s.t. !- P in ^ff.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

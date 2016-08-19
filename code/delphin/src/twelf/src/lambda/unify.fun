@@ -791,7 +791,8 @@ struct
 	       else raise Unify "Skolem constant clash"
 	   | (FVar (n1,_, _,_), FVar (n2,_, _,_)) =>
 	       if (n1 = n2) then unifySpine (Gglobal, G, (S1, s1), (S2, s2))
-	       else raise Unify "Free variable clash"
+	       else raise Unify ("Free variable clash (`" ^ n1 ^ " vs. `" ^ n2 ^ ")") 
+                         (* ABP WARNING: Better to use Symbol.fvar instead of fixing it to "`" *)
 	   | (Def (d1), Def (d2)) =>
 	       if (d1 = d2) then (* because of strict *) 
 		 unifySpine (Gglobal, G, (S1, s1), (S2, s2))

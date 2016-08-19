@@ -3,7 +3,7 @@
 
 structure DelphinOpsem : DELPHIN_OPSEM = 
   struct
-    exception NoSolution
+    exception NoSolution of string
     structure I = IntSyn
     structure D = DelphinIntSyntax
 
@@ -80,7 +80,8 @@ structure DelphinOpsem : DELPHIN_OPSEM =
 
                              
 
-    fun eval G E = evalW G (D.whnfE E)
+    fun eval G E = evalW G (D.whnfE E) 
+
     and evalW G (E as D.Var (D.Fixed _, _)) = E (* Will only occur if i is parameter *)
       | evalW G (E as D.Var _) = E (* will occur in evaluation of patterns in cases *)
       | evalW G (E as D.Quote _) = E (* LF Terms are values *)
@@ -92,12 +93,12 @@ structure DelphinOpsem : DELPHIN_OPSEM =
       | evalW G (D.App (Efun, argList)) =  
              let
 	       val funVal = eval G Efun
-	       val cList = case funVal
-		           of D.Lam(cList, _, _) => cList
-			    | E => crash()
+	       val (cList, fileInfo) = case funVal
+		                          of D.Lam(cList, _, fileInfo) => (cList, fileInfo)
+					   | E => crash()
 
                (* evaluate the spine to values *)
-	       val argsVal = map (fn (vis, fileInfo, S') => eval G S') argList
+	       val argsVal = map (fn (vis, _, S') => eval G S') argList
 
 
                (* matchCaseR(C, spine) = (SOME E) or NONE
@@ -109,17 +110,24 @@ structure DelphinOpsem : DELPHIN_OPSEM =
 			       val E1 = eval G E1 (* evaluate the pattern.
 						   * needed for patterns that use "pop"
 						   *)
+
 			       val _ = UnifyDelphinNoTrail.unifyE(I.Null, D.coerceCtx G, E1, S)
 			     in
 			       matchCaseR(D.Match(pats, E2), Spine)
 			     end
 			   handle UnifyDelphinNoTrail.Error _ => NONE
-				| NoSolution => NONE)
+				| NoSolution _ => NONE)
 
 		 | matchCaseR (D.Match ([], E2), []) = SOME E2 (* match successful! *)
 		 | matchCaseR _ = crash() (* badly typed *)
 
-	       fun matchCases [] = raise NoSolution
+	       fun matchCases [] = 
+		         (case fileInfo
+			    of NONE => raise NoSolution ""
+			     | SOME(filename, r) => raise NoSolution
+		                                          (Paths.wrapLoc(Paths.Loc (filename, r), 
+                                                            "Match Non-Exhaustive Failure (point of failure)" ^ "\n")))
+
 		 | matchCases (C::cs) = (case (matchCaseR(reduceCase I.Null G C, argsVal))
 					   of NONE => matchCases cs
 					    | SOME(E) => E)
@@ -178,7 +186,7 @@ structure DelphinOpsem : DELPHIN_OPSEM =
 											       *)
 						  | removeNewF _ = crash()
 					      in
-						D.Lam (map addPop Clist, removeNewF (D.whnfF F), NONE)
+						D.Lam (map addPop Clist, removeNewF (D.whnfF F), fileInfo)
 					      end
 				     | V => crash () (* impossible *)
 					      (* D.Pop(i, V, fileInfo) *)
@@ -200,13 +208,6 @@ structure DelphinOpsem : DELPHIN_OPSEM =
 
 
 
-    fun eval0 E = let 
-		    val V = SOME(eval (I.Null) E)
-		              handle NoSolution => NONE
-		  in
-		    case V of
-		      SOME V => V
-		     | _ => raise NoSolution
-		  end
+    fun eval0 E = eval (I.Null) E
 
 end

@@ -1,0 +1,49 @@
+%{
+thm2 : !- _ !*! pi boolean ([x:n-tm]  ^^ (if (v (eq x tt boolean)) tt (v (eq x ff boolean)))).
+
+thm1 : !-  _ !*! (^ (v (pi boolean ([x:n-tm]  ^^ (if (v (eq x tt boolean)) tt (v (eq x ff boolean))))))) 
+     = =n=>-elim (nall-elim law6 _) thm2.
+}%
+
+
+hol-boolcases-ax : !- axiom !*! (^ (app (lam ([p:n-tm] v (pi boolean ([x:n-tm] ^ app p x))))
+         (lam
+             ([x:n-tm]
+                 app
+                    (app (lam ([x1:n-tm] lam ([y:n-tm] if x1 tt y)))
+                        (app (app (=p= boolean) x) tt))
+                    (app (app (=p= boolean) x) ff))))). 
+
+
+hol-select-ax : {x:n-tm} !- axiom !*! (^
+		      (app
+                      (lam
+		       ([p:n-tm]
+			v
+			(pi (pi T ([x:n-tm] boolean))
+			 ([x:n-tm] ^ app p x))))
+                      (lam
+		       ([x:n-tm]
+			app
+			(lam ([p:n-tm] v (pi T ([x1:n-tm] ^ app p x1))))
+			(lam
+			 ([x1:n-tm]
+			  
+			  app (app =p=> (app x x1))
+			    (app x
+			     (app
+			      (lam
+			       ([p:n-tm]
+				decide (app inhabited (set T ([x2:n-tm] ^ app p x2)))
+				([x3:n-tm] x3) ([x4:n-tm] arb T))) x)))))))). 
+
+hol-antisym-ax : !- axiom !*! (^ (app (lam ([p:n-tm] v (pi boolean ([x:n-tm] ^ app p x))))
+			(lam
+			 ([x:n-tm]
+			  app (lam ([p:n-tm] v (pi boolean ([x1:n-tm] ^ app p x1))))
+			  (lam
+			   ([x1:n-tm]
+                            app (app =p=> (app (app =p=> x) x1))
+			      (app (app =p=> (app (app =p=> x1) x))
+				(app (app (=p= boolean) x) x1)))))))). 
+

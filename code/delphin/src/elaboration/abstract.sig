@@ -16,7 +16,7 @@ sig
     | LV of Paths.region * IntSyn.Block                          (*     | L             if . |- L in W                   *) 
     | PV of Paths.region * string * string                       (*     | PatVar (Delphin -- (name and original name) )  *)
 
-  val abstractPatVarsExp :  Paths.region * DelphinIntermediateSyntax.Exp * DelphinIntermediateSyntax.Types 
+  val abstractPatVarsExp :  Paths.region * DelphinIntermediateSyntax.Exp * DelphinIntermediateSyntax.Types * bool
                             -> DelphinIntermediateSyntax.Exp
   val abstractPatVarsFunList :  (Paths.region *  DelphinIntermediateSyntax.NormalDec * DelphinIntermediateSyntax.Exp) list  
                             ->  (Paths.region *  DelphinIntermediateSyntax.NormalDec * DelphinIntermediateSyntax.Exp) list 

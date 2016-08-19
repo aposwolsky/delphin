@@ -291,14 +291,9 @@ structure PrintDelphinExt =
     and TypesToFormat0 (D.LF (_, isP, A), k) = k (Fmt.HVbox[Fmt.String("<"), lfexpToFormat0 (A), Fmt.String(isParamToString isP), Fmt.String(">")], maxPrec)
       | TypesToFormat0 (D.Meta (_, F), k) = Fmt.Hbox[FormulaToFormat0(F, k),Fmt.String(isParamToString (* isP *) D.Existential)]
 
-    and FunctionDecsToFormat0 ([], k) = raise Domain (* no empty lists *)
+    and FunctionDecsToFormat0 ([], k) = raise Domain 
 
-
-      | FunctionDecsToFormat0 ((D.Implicit, D.NormalDec (_, sO, D.LF(_, isP, A)))::funDecs, k) = 
-              FunctionDecsToFormat0 (funDecs, k)
-
-
-      | FunctionDecsToFormat0 ((D.Visible, D.NormalDec (_, sO, D.LF(_, isP, A)))::funDecs, k) = 
+      | FunctionDecsToFormat0 ((D.NormalDec (_, sO, D.LF(_, isP, A)))::funDecs, k) = 
               let
 		val (fmt1, prec1) =  case sO
 		                     of (SOME s) => (Fmt.HVbox[Fmt.String("<"), Fmt.String(s), 
@@ -346,7 +341,7 @@ structure PrintDelphinExt =
 	      end
        *)
 
-      | FunctionDecsToFormat0 ((D.Visible, D.NormalDec (_, _, D.Meta (_, F1)))::funDecs, k) = 
+      | FunctionDecsToFormat0 ((D.NormalDec (_, _, D.Meta (_, F1)))::funDecs, k) = 
 	      FormulaToFormat0 (F1,
 				fn (fmt1, prec1) =>
 				      let 
@@ -364,37 +359,38 @@ structure PrintDelphinExt =
 									andPrec))
 				      end)
 
-
-      | FunctionDecsToFormat0 ((D.Implicit, D.NormalDec (_, _, D.Meta (_, F1)))::funDecs, k) = 
-		     raise Domain (* Cannot have meta-level implicit functions *)
-
     
     and FormulaToFormat0 (D.Top _, k) = k (Fmt.String("unit"), maxPrec)
 
       | FormulaToFormat0 (D.All (_, funDecs, F), k) =
 
             let
-	      fun allImplicit [] = true
-		| allImplicit ((D.Visible, _)::ds) = false
-		| allImplicit ((D.Implicit, _)::ds) = allImplicit ds
+	      fun getExplicit [] = []
+		| getExplicit ((D.Visible, D)::ds) = D :: (getExplicit ds)
+		| getExplicit ((D.Implicit, _)::ds) = getExplicit ds
+
+	      val explicitFunDecs = getExplicit funDecs
+	      val numToPrint = List.length explicitFunDecs
 		
 	    in
-	      if (allImplicit funDecs) then (* If we change it to print out all implicit arguments,
+	      if (numToPrint = 0) then      
+		                            (* If we change it to print out all implicit arguments,
 					     * e.g. marked with << ... >>, then we need to remove this check.
 					     * ALSO.. These functions that are "completely" implicit are hard to reason about
 					     * in convert.fun . Perhaps they should be disallowed.
 					     *)
 		FormulaToFormat0 (F, k)
 	      else
-		FunctionDecsToFormat0 (funDecs,
+		FunctionDecsToFormat0 (explicitFunDecs,
 	           fn (fmt1, prec1) => let
-				      val prec1 = if List.length(funDecs) > 1 then minPrec else prec1 (* if there is more
-												       * than one dec
-												       * then we need to put
-												       * in paranethesis.
-												       * which is done by setting
-												       * prec to minPrec
-												       *)
+				      val prec1 = if numToPrint > 1 then minPrec else prec1 
+				          (* if there is more
+					   * than one dec
+					   * then we need to put
+					   * in paranethesis.
+					   * which is done by setting
+					   * prec to minPrec
+					   *)
 				    in
 				      FormulaToFormat0 (F,
 						  fn (fmt2, prec2) => k (fmtinfix Fmt.HVbox (Right, rtArrowPrec, ((fmt1, prec1),
@@ -633,12 +629,11 @@ structure PrintDelphinExt =
 		  | checkImplicitMatch _ = NONE
 
 	      in
-		if isDetailed then
-		  (case (checkImplicitMatch C)
-		     of (SOME E) => ExpToFormat0 (E, k, isDetailed, printEps)
-		      | NONE => k (caseListToFormat ([C], true, printEps), minPrec))
-		else
-		  k (Fmt.String("fn ..."), minPrec)
+		case (checkImplicitMatch C)
+		  of (SOME E) => ExpToFormat0 (E, k, isDetailed, printEps)
+		   | NONE => if isDetailed
+			       then k (caseListToFormat ([C], true, printEps), minPrec)
+			     else k (Fmt.String("fn ..."), minPrec)
 	      end
 
 		

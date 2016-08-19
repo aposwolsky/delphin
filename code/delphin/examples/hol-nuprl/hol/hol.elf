@@ -77,6 +77,164 @@ neg   : tm (bool arr bool) = \ [P:tm bool] P ==> false.
 the|  : tm ((A arr bool) arr A).
 the   = [P] the| @ P.
 ex|   : tm ((A arr bool) arr bool)
-      = \ [P:tm (A arr bool)] P @ (the (\ [x] P @ x)).
+      = \ [P:tm (A arr bool)] P @ (the P).
 ex    = [P] ex| @ P.
+
+
+bool-cases-ax  : |- all (\ [x:tm bool] x === true \/ x === false).
+select-ax      : {A:tp} |- all (\ [P:tm (A arr bool)]  all (\ [x] P @ x ==>  P @ (the P))).
+imp-antisym-ax : |- all (\ [x:tm bool] 
+                           all (\ [y:tm bool] 
+                                  (x ==> y) ==> (y ==> x) ==> x === y)).
+
+
+
+
+% Cantor's theorem (HOL)
+% Author: Carsten Schuermann, PAAR demo
+% Equality   (from Isabelle’s Logics: HOL 2008)
+
+mp'    : |- H ==> G -> |- H -> |- G 
+      = [u] [v] mp v u.
+
+sym : |- A === B -> |- B === A
+    = [u] sub ([x] x === A) u refl.
+
+trans : |- A === B -> |- B === C -> |- A === C
+      = [u] [v] sub ([x] A === x) v u.
+  
+sub'   : {G:tm A -> tm o} |- H1 === H2 -> |- G H2 -> |- G H1
+       = [G] [u] [D] sub G (sym u) D.						     
+
+box_equals : |- A === B -> |- A === C -> |- B === D -> |- C === D
+           = [u] [v] [w] sub' ([x] x === D) (sub' ([x] x === B) (sym v) u) w.
+
+arg_cong : |- X === Y -> |- F @ X === F @ Y
+	 = [u] sub' ([x] F @ x === F @ Y) u refl.
+
+fun_cong : |- F === G -> |- F @ X === G @ X
+	 = [u] sub' ([x] x @ X === G @ X) u refl.
+ 
+cong : |- F === G -> |- X === Y -> |- F @ X === G @ Y
+     = [u][v]  sub' ([x] x @ X === G @ Y) u (sub' ([x] G @ x === G @ Y) v refl).
+
+not = [P] neg @ P.
+ 
+%abbrev
+not_sym : |- not (T === S) -> |- not (S === T)
+	= [u] sub' ([x] x) beta 
+	   (disch ([v] mp' (sub ([x] x) beta u) (sym v))).
+
+eqbetal : |- (\ F) @ X === G -> |- F X === G 
+	= [u] sub ([x] x === G) beta u.
+
+eqbetar : |- F === (\ G) @ Y -> |- F === G Y 
+        = [u] sym (eqbetal (sym u)).
+						
+		
+eqtruee : |- P === true -> |- P 
+     = [u] sub' ([x] x) u refl.
+
+
+% Propositional Logic
+
+truei : |- true
+      = refl.
+
+alle : |- all (\ [x] A x) -> {t} |- A t
+     = [u: |- all (\ [x] A x)] [t] 
+	eqtruee (eqbetal (eqbetar (fun_cong (sub ([x] x) beta u)))).
+
+eqtruei : |- P -> |- P === true
+   = [u]  mp' (mp' (alle (alle imp-antisym-ax P) true) (disch [v] truei)) 
+      (disch [w] u).
+
+alli : ({x} |- A x) -> |- all (\ [x] A x)
+     = [u : {x} |- A x] sub' ([x] x) beta (abs [x] eqtruei (u x)).
+				
+falsee : |- false -> |- P 
+        = [u] alle u P.
+
+andi : |- A -> |- B -> |- A /\ B
+     = [u] [v] sub' ([x] x @ B) beta
+	(sub' ([x] x) beta 
+	   (sub' ([x] x) beta 
+	      (abs [y] eqtruei (disch [w] mp' (mp' w u) v)))).
+
+ande1: |- A /\ B -> |- A 
+     = [u] mp' (alle (sub ([x] x) beta (sub ([x] x @ B) beta u)) A) (disch [v] disch [w] v).
+
+ande2: |- A /\ B -> |- B
+     = [u] mp' (alle (sub ([x] x) beta (sub ([x] x @ B) beta u)) B) (disch [v] disch [w] w).
+
+ori1 : |- A -> |- A \/ B 
+     = [u] sub' ([x] x @ B) beta
+	(sub' ([x] x) beta (alli [x] disch [v] disch [w] mp' v u)).
+
+ori2 : |- B -> |- A \/ B
+     = [u] sub' ([x] x @ B) beta
+	(sub' ([x] x) beta (alli [x] disch [v] disch [w] mp' w u)).
+
+ore  : |- A \/ B -> (|- A -> |- C) -> (|- B -> |- C) -> |- C
+     = [u][v][w] mp' (mp' (alle (sub ([x] x) beta (sub ([x] x @ B) beta u)) C) 
+		       (disch [z] v z)) (disch [z] w z).
+
+noti : (|- P -> |- false) -> |- not P
+     = [u] sub' ([x] x) beta (disch [v] u v).
+
+note : |- not P -> |- P -> |- R
+     = [u] [v] falsee (mp' (sub ([x] x) beta u) v).
+
+
+exi : {t} |- A t -> |- ex (\ [x] A x)
+    = [t] [u] sub' ([x] x) beta (mp' (alle (alle select-ax _) t) 
+				  (sub' ([x] x) beta u)).
+
+%abbrev
+exe : |- ex (\ [x] A x) -> ({x} |- A x -> |- C) -> |- C
+    = [u][v] v _ (sub ([x] x) beta (sub ([x] x) beta u)).
+
+
+
+
+% Logical equivalence omitted (seems trivial)
+
+
+% Classical nature
+
+excluded_middle : |- (not P) \/ P
+                =  sub' ([x] x @ P) beta (sub' ([x] x) beta (alli 
+			   ([x] ore (alle bool-cases-ax P) 
+			      ([u] disch [v] disch [w] mp' w (eqtruee u)) 
+			      ([u] disch [v] disch [w] mp' v (noti [z] sub ([x] x) u z))))).
+
+ccontr : (|- not P -> |- false) -> |- P
+       = [u] ore excluded_middle ([v] falsee (u v)) ([v] v).
+
+classical : (|- not P -> |- P) -> |- P
+	  = [u] ore excluded_middle ([v] u v) ([v] v).
+
+disjCI : (|- not Q -> |- P) -> |- P \/ Q
+       = [u] ore excluded_middle ([v] ori1 (u v)) ([v] ori2 v).
+
+% exCI : ({x} |- not (P x) -> |- P T) -> |- ex (\ [x]  P x).
+
+notnotD : |- not (not P) -> |- P 
+        = [u] ore excluded_middle ([v] note u v) ([v] v).
+ 
+swap : |- not P ->  (|- not Q -> |- P) -> |- Q
+     = [u][v] ore (disjCI v) ([v] note u v) ([v] v).
+
+
+lemma : |- A === not A -> |- false
+      = [u] note (ore (sub ([x] not A  \/  x) u excluded_middle) ([v] v) ([v] v))
+	         (ore (sub' ([x] x \/ A) u excluded_middle) ([v] v) ([v] v)).
+
+cantor : |- all (\ [G] ex (\ [F] all (\ [X] not (G @ X === F)))) 
+	  = alli ([G:tm (A arr A arr o)] 
+	      exi (\ [y] not (G @ y @ y)) 
+	        (alli [X: tm A] 
+		     noti ([u] lemma (eqbetar (fun_cong u))))).
+
+
 

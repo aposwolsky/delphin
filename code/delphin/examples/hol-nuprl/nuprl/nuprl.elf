@@ -17,7 +17,7 @@ s : integer -> integer.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-n-tm : type.				
+n-tm : type.				%name n-tm N x.
 
 uni : integer -> n-tm.
 
@@ -381,4 +381,3 @@ nex = [T] [S] sigma T S.
 n~ = [T] T =n=> nfalse.			%prefix 29 n~.
 
 n<=> = [T] [S] (T =n=> S) n/\ (T =n=> S).	%infix right 26 n<=>. 
-

@@ -1,26 +1,6 @@
-Delphin Quickstart Guide and Options
---------------------------------------------
-Compile by doing (in ML):
-- CM.make "sources.cm";
+To Install just do "make".
+In order to compile under SML, you may also do:
+CM.make "src/sources.cm" .
+You can then access the frontend by doing "Delphin.top() "
 
-Go to the top-level by:
-- Delphin.top();
-
-
-BEFORE going to the top-level you can set some preferences
-
-(1) Delphin.enableCoverage : bool ref    (* default is set to true *)
-
-(2) Delphin.enableTermination : bool ref   (* default is set to true *)
-
-(3) Delphin.stopOnWarning : bool ref (* default is set to false *)
-
-(4) Delphin.printImplicit : bool ref (* default is set to false *)
-                 (* This will print all Delphin and LF implicit arguments *)
-
-(5) Delphin.debug : bool ref (* default is set to false *)
-        (* This will do two things:
-            (a) print out the internal syntax for every function you write
-            (b) print out the comparisons that the termination-checker made
-        *)
 

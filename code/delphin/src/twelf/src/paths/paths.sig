@@ -9,7 +9,7 @@ sig
 
   (* line numbering, used when printing regions *)
   type linesInfo			(* mapping from character positions to lines in a file *)
-  val resetLines : unit -> unit         (* reset line numbering *)
+  val resetLines : string -> unit       (* reset line numbering (takes filename, uses "" as default value) *)
   val newLine : int -> unit		(* new line starts at character i *)
   val getLinesInfo : unit -> linesInfo  (* get lines info for current file *)
   val restoreLinesInfo : linesInfo -> unit 

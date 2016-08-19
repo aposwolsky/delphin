@@ -477,6 +477,9 @@ structure DelphinTermination =
 	   * which represents the top-level so far..
 	   *)
            let
+
+	        val errorList : string list ref  = ref []
+
 	        val interactive = ref false; (* only relevant when debug is true *)
 
 	        val evarList : ((D.Exp option ref) * TermCriteria) list ref = ref nil  
@@ -503,7 +506,7 @@ structure DelphinTermination =
 
 		fun findVar r = findVar'(r, !evarList)
 
-	        fun generateError(fileInfo, s) =
+		fun generateCriticalError(fileInfo, s) =
 		  let
 		    val msg = "WARNING:  Function may not terminate:\n" ^ s ^ "\n"
 		  in
@@ -511,6 +514,19 @@ structure DelphinTermination =
 		      of NONE => raise Error (Paths.wrapLoc(Paths.Loc (filename, r), msg))
 		    | SOME(filename, r) => raise Error (Paths.wrapLoc(Paths.Loc (filename, r), msg))
 		  end 
+
+	        fun generateErrorString(fileInfo, s) =
+		  let
+		    val msg = "WARNING:  Function may not terminate:\n" ^ s ^ "\n"
+		  in
+		    case fileInfo
+		      of NONE => (Paths.wrapLoc(Paths.Loc (filename, r), msg))
+		    | SOME(filename, r) => (Paths.wrapLoc(Paths.Loc (filename, r), msg))
+		  end 
+
+		(* addError (b, fileInfo, s) = if b = true, then it adds an error, otherwise does nothing *)
+		fun addError(true, fileInfo, s) = (errorList := !errorList @ [generateErrorString(fileInfo, s)])
+		  | addError(false, fileInfo, s) = ();
 
 
 		fun newDecEqual(D.NewDecLF (_, A1), D.NewDecLF (_, A2)) = Conv.conv ((A1, I.id), (A2, I.id))
@@ -681,9 +697,6 @@ structure DelphinTermination =
 		 *  in each possible branch.
 		 *)
 
-		val initialK = fn (V, (T, term)) => if isTerm term then V
-					else generateError(NONE, "Leftover termination constraints")
-
 	        fun terminator(Glocal, E, K) = terminatorW(Glocal, D.whnfE E, K) 
 		                        handle D.SubstFailed => raise Error ("Delphin Termination Error:  whnf Failed (IMPOSSIBLE!)")
 
@@ -695,6 +708,9 @@ structure DelphinTermination =
 			   val T' = D.substTypes(T, I.Shift i)
 			   (* val term' = substTerm(term, D.shiftTo(i, D.id)) *)
 			   val term' = setYESTermsType T' (* this is terminating.. *)
+
+		           (* let's return a new EVar so it won't get stuck if it tries to match against it with a value.. *)
+			   val E = newVar(getFormula T', term')
 			 in
 			   K (E, (T', term'))
 			 end
@@ -735,23 +751,32 @@ structure DelphinTermination =
 					    (case compare(Glocal, E2, var, fileInfo)
 					       of Less => checkArgs(args, TermYES, Ds, I.Dot (D.coerceExp E2, t)) (* it terminates! *)
 					        | Equal => (case term
-						            of TermNO => generateError(fileInfo, "Argument(s) stay the same (do not get smaller)")
-							     | _ => checkArgs(args, term, Ds, I.Dot (D.coerceExp E2, t)) (* it may terminates *))
-						| Unknown => generateError(fileInfo, "Argument does not get smaller"))
+						            of TermNO => 
+							      (addError(true, fileInfo, "Argument(s) stay the same (do not get smaller)") ; 
+							       (* We added an error, so we now pretend it is terminating and
+								* see if we get any other terminatione rrors.. *)
+							       checkArgs(args, TermYES, Ds, I.Dot (D.coerceExp E2, t))
+								)
+							     | _ => checkArgs(args, term, Ds, I.Dot (D.coerceExp E2, t)) (* it may terminate *))
+						| Unknown => (addError(true, fileInfo, "Argument does not get smaller") ;
+							       (* We added an error, so we now pretend it is terminating and
+								* see if we get any other terminatione rrors.. *)
+							       checkArgs(args, TermYES, Ds, I.Dot (D.coerceExp E2, t)))
+					    )
 
 
 				    | checkArgs ((vis,fileInfo,E2)::args, term, (_, D.NormalDec(_, tArg))::Ds, t (* codomain of t is Glocal *)) =
 					     checkArgs(args, term, Ds, I.Dot (D.coerceExp E2, t))
 
-				    | checkArgs ([], term, [], t) = (t, term)
+				    | checkArgs ([], term, [], t) =(t, term)
 				    | checkArgs _ = raise Error "Delphin Termination Error:  Incompatible number of args"
 					   
 				  (* Check that all arguments are terminating! *)
 		                  fun evalArgs (vis, fileInfo, E) =
 				       let
 					 val V = terminator (Glocal, E, 
-							     fn (V, (T, term)) => if isTerm term then V
-										  else generateError(fileInfo, "Argument is not terminating"))
+							     fn (V, (T, term)) => 
+							          (addError(not (isTerm term), fileInfo, "Argument is not terminating") ; V))
 				       in
 					 (vis, fileInfo, V)
 				       end
@@ -759,7 +784,7 @@ structure DelphinTermination =
 				  val argsVal = map evalArgs args
 				  val (t, leftOverTerm) = checkArgs (argsVal, term, Ds, I.id)
  
-                                  (* if it terminates, the above returns TermYES, but we now make it into the right form *)
+                                  (* checkArgs may return TermYES, but we now make it into the right form *)
 				  val leftOverTerm = case leftOverTerm
 				                     of TermYES => setYESTermsF (D.FClo(fResult, t))
 						      | _ => leftOverTerm
@@ -770,14 +795,14 @@ structure DelphinTermination =
 					       fun matchCaseR (D.Match ((_, E1)::pats, E2), (_, _, S)::Spine) =
 						 (let
 						    val E1 = O.eval (Glocal) E1 (* evaluate the pattern.
-												     * needed for patterns that use "pop"
-												     *)
+										 * needed for patterns that use "pop"
+										 *)
 						    val _ = U.unifyE(D.coerceCtx Gglobal, D.coerceCtx Glocal, E1, S)
 						  in
 						    matchCaseR(D.Match(pats, E2), Spine)
 						  end
-						    handle U.Error _ => generateError(fileInfo, "Termination Checker Virtual Execution failed ")
-							 | O.NoSolution => generateError(fileInfo, "Termination Checker Virtual Execution failed "))
+						    handle U.Error _ => generateCriticalError(fileInfo, "Termination Checker Virtual Execution failed ")
+							 | O.NoSolution _ => generateCriticalError(fileInfo, "Termination Checker Virtual Execution failed "))
 
 						 | matchCaseR (D.Match ([], E2), []) = E2 (* match successful! *)
 						 | matchCaseR _ = crash() (* badly typed *)
@@ -982,7 +1007,7 @@ structure DelphinTermination =
 					   end
 				    | getTermVarsW (_, F) = 
                                                         if (hasFun F) then 
-					                 generateError(NONE, 
+					                 generateCriticalError(NONE, 
 								       "Cannot termination check fixpoints whose output also has functions... (at least not yet...)") 
 							 (* COMMENT:  This isn't too difficult.. we would just need to apply out the functions 
 							  * in the result as well...
@@ -1023,19 +1048,19 @@ structure DelphinTermination =
 				    | checkAllCompatible (F1::F2::Fs) =
 				          let
 					    val _ = (U.unifyF(D.coerceCtx Gglobal, D.coerceCtx Glocal, F1, F2)
-						     handle U.Error s => generateError(NONE, "Cannot termination check mutually recursive fixpoints that have different {<..>} in the type."))
+						     handle U.Error s => generateCriticalError(NONE, "Cannot termination check mutually recursive fixpoints that have different {<..>} in the type."))
 					  in
 					     checkAllCompatible(F1:: Fs)
 					  end
 
 				  val _ = checkAllCompatible (map getShape termCriteriaList)
 
-				  fun runFixpoint (0, errorList) = 
+				  fun runFixpoint (i) =
+					 if (i > numFuns) then
 				           (* done trying all the functions.. now continue with "K" *)
-				            ( (K (D.newEVar (getFormula Tspecified), (Tspecified, setYESTermsType Tspecified)), errorList)
-					    handle Error s => (D.Unit (* value doesn't matter *), s :: errorList))
-
-				    | runFixpoint (i, errorList) =
+				           (K (D.newEVar (getFormula Tspecified), (Tspecified, setYESTermsType Tspecified)))
+					 else
+					   (* Try function i *)
 				           let
 					     val Fspecified = getElement(i, FspecifiedList)
 					     val termCriteria = getElement(i, termCriteriaList)
@@ -1048,7 +1073,7 @@ structure DelphinTermination =
 					       | endYes(TermApp (E,desired), TermApp (_, template)) = TermApp(E, endYes(desired, template))
 					       | endYes(TermNew (D,desired), TermNew (_, template)) = TermNew(D, endYes(desired, template))
 					       | endYes(desired, template) = 
-					             generateError(NONE, "Cannot termination check mutually recursive fixpoints that have different {<..>} in the type.")
+					             generateCriticalError(NONE, "Cannot termination check mutually recursive fixpoints that have different {<..>} in the type.")
 
 					     (* endNo(desiredTermination,  templateToFollow) *)
 					     fun endNo(TermNO, TermApp _) = TermNO
@@ -1057,7 +1082,7 @@ structure DelphinTermination =
 					       | endNo(TermApp (E,desired), TermApp (_, template)) = TermApp(E, endNo(desired, template))
 					       | endNo(TermNew (D,desired), TermNew (_, template)) = TermNew(D, endNo(desired, template))
 					       | endNo(desired, template) = 
-					             generateError(NONE, "Cannot termination check mutually recursive fixpoints that have different {<..>} in the type.")
+					             generateCriticalError(NONE, "Cannot termination check mutually recursive fixpoints that have different {<..>} in the type.")
 
 
 				             (* using termination for function i, build up what the other termination criteria's must be *)
@@ -1106,25 +1131,15 @@ structure DelphinTermination =
 					      * i.e. we want to run the termination checker on all mutually recursive functions, even
 					      * if one fails.
 					      *)
-					     val errorList' =  (terminator(Glocal, execution, 
-									     fn (V, (_, dead)) => 
-									     if isTerm dead then V
-									     else
-									       generateError(NONE, "Fixpoint is not terminating")) ; errorList)
-					       handle Error s => s :: errorList
-					       					       
+					     val _ =  terminator(Glocal, execution, 
+									  fn (V, (_, dead)) => 
+									     (addError(not (isTerm dead), NONE, "Fixpoint is not terminating");
+									      V))
 					   in
-					     runFixpoint (i-1, errorList')
+					     runFixpoint (i+1)
 					   end
-					 
-				  fun listToString [] = ""
-				    | listToString (s::ss) = s ^ "\n" ^ (listToString ss)
-
-
 				in
-				  case (runFixpoint (numFuns, []))
-				    of (V, []) => V
-				     | (_ (* ignore value *), sList) => raise Error (listToString sList)
+				  runFixpoint (1)
 				end
 
 
@@ -1138,9 +1153,16 @@ structure DelphinTermination =
 		  | terminatorW(Glocal, D.EClo _, K) = crash() (* impossible by whnf *)
 
 
+		fun listToString [] = ""
+		  | listToString (s::ss) = s ^ "\n" ^ (listToString ss)
 
+	        (* Run the termination checker *)
+		val initialK = fn (V, (T, term)) => (addError(not (isTerm term), NONE, "Leftover termination constraints") ; V)
+		val _ = terminator(I.Null (* local is empty *), E, initialK )
 
 	   in
-	     terminator(I.Null (* local is empty *), E, initialK )
+	     case (!errorList)
+	       of [] => ()
+		| sList => raise Error (listToString sList)
 	   end
   end

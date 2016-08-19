@@ -18,6 +18,7 @@ sig
   val changePath : string -> unit
   val resetMetaSigAndWorld : unit -> unit
 
+  val initTop' : unit -> unit
   val top' :  (DelphinIntSyntax.decCtx) ref  *
               (DelphinIntSyntax.Sub) ref
               -> unit

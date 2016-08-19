@@ -23,14 +23,33 @@ struct
     (* !linePosList is a list of starting character positions for each input line *)
     (* used to convert character positions into line.column format *)
     (* maintained with state *)
-    val linePosList = ref nil : pos list ref
+    (* val linePosList = ref nil : pos list ref *)
+    val linePosListRef = ref (ref nil) : pos list ref ref
+
+    (* ABP:  Updated to contain a collection of linePosList indexed by filename *)
+    val linePosListCollection : (string * (pos list ref)) list ref = ref [("", !linePosListRef)]
   in
-    fun resetLines () = linePosList := nil
-    fun newLine (i) = linePosList := i::(!linePosList)
-    fun getLinesInfo () = !linePosList
-    fun restoreLinesInfo (l) = linePosList := l
+    fun resetLines (filename) = 
+           let
+	     val linePosList = ref nil
+	     val _ = linePosListRef := linePosList
+	     val _ = linePosListCollection := ((filename, linePosList) :: !linePosListCollection)
+	   in
+	     ()
+	   end
+    fun newLine (i) = (!linePosListRef) := i::(!(!linePosListRef))
+    fun getLinesInfo () = !(!linePosListRef)
+
+    fun restoreLinesInfo (l) = (!linePosListRef) := l
     (* posToLineCol (i) = (line,column) for character position i *)
-    fun posToLineCol (i) = posToLineCol' (!linePosList, i)
+    fun posToLineCol (i) = posToLineCol' (!(!linePosListRef), i)
+
+
+    fun getLinesInfoByFileName' (filename, []) = !(!linePosListRef) (* if not found, just use the currently
+								     * selected linePosList *)
+      | getLinesInfoByFileName' (filename, (name, linePosList)::l)
+                       = if (filename = name) then !linePosList else getLinesInfoByFileName'(filename, l)
+    fun getLinesInfoByFileName (filename) = getLinesInfoByFileName' (filename, !linePosListCollection)
   end
 
   (* join (r1, r2) = r
@@ -74,8 +93,8 @@ struct
       end
     | wrapLoc' (loc, NONE, msg) = wrapLoc0 (loc, msg)
 
-  fun wrapLoc (loc, msg) =
-        wrapLoc' (loc, SOME (getLinesInfo()), msg)
+  fun wrapLoc (loc as Loc (filename, _), msg) =
+        wrapLoc' (loc, SOME (getLinesInfoByFileName(filename)), msg)
 
   (* Paths, occurrences and occurrence trees only work well for normal forms *)
   (* In the general case, regions only approximate true source location *)

@@ -120,31 +120,28 @@ structure DelphinElab : DELPHIN_ELABORATOR =
 
     fun unifyTypes(smartInj, r, s, G, Tdesired, Tactual) =
       let
-	fun errorMsg(G, Tdesired, Tactual) =
-	  let
-	    val firstLine =  "   Expected Type: " ^ typeStr(smartInj, G, Tdesired) 
-	    val secondLine = "   Actual   Type: " ^ typeStr(smartInj, G, Tactual)
-	  in
-	    "\n" ^ firstLine ^ "\n" ^ secondLine ^ "\n"
-	  end
-	
+	(* Need to compute the errorMsg before calling unification
+	 * as it may assign logic variables incorrectly (due to constraints)
+         * (i.e. if it assigns a logic variable and then fails on the constraints,
+	 *       the side effect will be that the erroneous assignment was made)
+	 *)
+	val firstLine =  "   Expected Type: " ^ typeStr(smartInj, G, Tdesired) 
+	val secondLine = "   Actual   Type: " ^ typeStr(smartInj, G, Tactual)
+        val errorMsg =  "\n" ^ firstLine ^ "\n" ^ secondLine ^ "\n"
+
       in
 	(U.unifyT(I.Null, D'.coerceCtx G, Tdesired, Tactual)
-	 handle U.Error msg => raise Error (Paths.wrapLoc (Paths.Loc (!filename, r), s ^ ": " ^ msg ^ errorMsg(G, Tdesired, Tactual))))
+	 handle U.Error msg => raise Error (Paths.wrapLoc (Paths.Loc (!filename, r), s ^ ": " ^ msg ^ errorMsg)))
       end
       
     fun unifyApxTypes(smartInj, r, s, Tdesired, Tactual) =
       let
-	fun createDetailedMessage() =
-	  let
-	    val firstLine =  "   Expected Type: " ^ typeStr(smartInj, I.Null, DA.apx2ExactType(I.Null, Tdesired))
-	    val secondLine = "   Actual   Type: " ^ typeStr(smartInj, I.Null, DA.apx2ExactType(I.Null, Tactual))
-	  in
-	    "\n" ^ firstLine ^ "\n" ^ secondLine ^ "\n"
-	  end
+	val firstLine =  "   Expected Type: " ^ typeStr(smartInj, I.Null, DA.apx2ExactType(I.Null, Tdesired))
+	val secondLine = "   Actual   Type: " ^ typeStr(smartInj, I.Null, DA.apx2ExactType(I.Null, Tactual))
+        val errorMsg =  "\n" ^ firstLine ^ "\n" ^ secondLine ^ "\n"
       in
 	DA.unifyTypes (Tdesired, Tactual)
-	       handle DA.ApproxUnify msg => raise Error (Paths.wrapLoc(Paths.Loc (!filename, r), s ^ ": " ^ msg ^ (createDetailedMessage ())))
+	       handle DA.ApproxUnify msg => raise Error (Paths.wrapLoc(Paths.Loc (!filename, r), s ^ ": " ^ msg ^ errorMsg))
       end
 
     fun strOpt2strListOpt NONE = NONE
@@ -879,8 +876,19 @@ structure DelphinElab : DELPHIN_ELABORATOR =
 	       | fDecs nil res = DI.All (r, [], f2 res)
 	       | fDecs _ _ = raise Domain
 
-	     fun getJob ((_, Drecon, _, jobP, _) :: xs) = ReconTerm.jand(jobP, ReconTerm.jwithctx(I.Decl(I.Null, Drecon), getJob xs))
-	       | getJob [] = job2
+             (* Update:  July 29, 2008
+	      * Need to do jscopeVars to these jobs as it will allow the FVars to be 
+              * scoped in the extended context.
+	      * Example:
+	      * Consider the type: <x:_> -> <foo (B : bar x)> -> ....
+	      * If this is being typed in G, then
+              * the FVar "B" makes sense in "G,x:_"
+              * The "jscopeVars" will allow fresh FVars to make sense in the extended context.
+	      *)
+	     fun getJob ((_, Drecon, _, jobP, _) :: xs) = ReconTerm.jscopeVars 
+	                                                    (ReconTerm.jand(jobP, 
+									    ReconTerm.jwithctx(I.Decl(I.Null, Drecon), getJob xs)))
+	       | getJob [] = ReconTerm.jscopeVars job2
 
 
 	     fun getApproxDecs [] = []
@@ -3457,6 +3465,7 @@ structure DelphinElab : DELPHIN_ELABORATOR =
 		   (* We now need to do ((R => {Glocal}R) worldApp) \Glocal  *)
 
 
+		   (* weakenE shifts types to make room for one epsilon... *)
 		   fun weakenE (I.Null, E) = E
 		     | weakenE (I.Decl(G, D'.NonInstantiableDec D), E) = weakenE(G, D'.New(D, E, SOME(!filename, r)))
 		     | weakenE _ = raise Domain (* broken invariant.. .Glocal only contains NonInstantiableDecs.. *)
@@ -3477,14 +3486,28 @@ structure DelphinElab : DELPHIN_ELABORATOR =
 		   val resultF = getResultType (T, varList) (* recall T is defined way above *)
 		                                            (* Gbefore |- resultF wff *)
 
+		   (* G |- GB wff
+		    * G' |- t : G
+		    * subCtx(GB, t) = GB'
+		    * then G' |- subCtx(GB,t) wff
+		    *)
+		   fun ctxToList (I.Null) = []
+		     | ctxToList (I.Decl(G, D)) = (ctxToList G) @ [D]
+		   fun listToCtx [] = I.Null
+		     | listToCtx (D::G) = I.mergeCtx(I.Decl(I.Null, D), listToCtx G)
+		   fun subCtx' ([], t) = []
+		     | subCtx' (D::G, t) = (D'.substDec(D, t)) :: subCtx'(G, I.dot1 t)
+		   fun subCtx (G, t) = listToCtx (subCtx' (ctxToList G, t))
+
+		             
 		   val caseB = D'.Eps(D'.NormalDec(NONE, D'.Meta(resultF)),
 				      D'.Match([(D'.Visible, D'.Var(D'.Fixed 1, defaultFileInfo))], 
-					       weakenE (Glocal, D'.Var(D'.Fixed (1 + (I.ctxLength Glocal)), defaultFileInfo))),
+					       weakenE (subCtx (Glocal, I.Shift 1), D'.Var(D'.Fixed ( 1 + (I.ctxLength Glocal)), defaultFileInfo))),
 				      defaultFileInfo)
 		   val caseFun = D'.Lam ([caseB], 
 					 D'.All(
 						[(D'.Visible, D'.NormalDec(NONE, D'.Meta(resultF)))], 
-						weakenF (Glocal, D'.FClo(resultF, I.Shift (I.ctxLength Glocal)))), 
+						D'.FClo(weakenF (Glocal, D'.FClo(resultF, I.Shift (I.ctxLength Glocal))), I.Shift 1)), 
 					 SOME(!filename, r))
 
 		   val caseApp = D'.App(caseFun, [(D'.Visible, SOME(!filename, r),worldApp)])
@@ -3498,30 +3521,62 @@ structure DelphinElab : DELPHIN_ELABORATOR =
 		   finalResult
 		 end
 
+
+
+	     (* generateEVarFirstCase(Gglobal, F, sc) *)
+	     (* Precondition:  Gglobal |- F wff . *)
+	     (* sc is a continuation executed on EVERY possibility *)
+	     fun generateEVarFirstCase (Gglobal, D'.NormalDec(_, D'.LF(isP, A)), sc) = 
+	       (case (D'.whnfP isP)
+		  of (D'.Existential) => 
+		    let
+		      val M = D'.Quote(DelphinCoverage.generateLF_EVar (D'.coerceCtx Gglobal, I.Null, A, fn U => U))
+		    in
+		      sc M
+		    end
+		  
+		   | (D'.Param) =>
+		    let
+		      val E = (D'.Var (D'.BVarLF ((ref NONE, A,D'.makeLFParamList Gglobal, ref nil), I.id), NONE))
+		    in
+		      sc E
+		    end
+		  
+		   | _ => raise Error (Paths.wrapLoc (Paths.Loc (!filename, r), "Unexplained Error.")))
+	       | generateEVarFirstCase (Gglobal, D'.NormalDec(_, D'.Meta(F)), sc) = sc (D'.newEVar F)
+
+
 	     (* createLastCase is based on "getStartGoal" in coverage.fun *)	   
 	     fun createLastCase (Glocal, varList, F, sc) = createLastCaseW (Glocal, varList, D'.whnfF F, sc)
 	     and createLastCaseW (Glocal, varList, D'.All([(visibility, D)], F), sc) =
-		      DelphinCoverage.generateEVarFirstCase(Gbefore, Glocal, 
-						   D, fn E => sc (D'.Match([(visibility, E)], createLastBody(varList@[E],Glocal))))
+		      generateEVarFirstCase(Gbefore, 
+					    D, fn E => sc (D'.Match([(visibility, D'.EClo(E, D'.shiftTo(I.ctxLength Glocal, D'.id) ))], createLastBody(varList@[E],Glocal))))
 	       | createLastCaseW (Glocal, varList, D'.All((visibility, D)::Ds, F), sc) =
-		      DelphinCoverage.generateEVarFirstCase(Gbefore, Glocal, 
-						   D, fn E => createLastCase(Glocal, varList@[E], D'.FClo(D'.All(Ds, F), I.Dot (D'.coerceExp E, I.id)), 
-							       fn C => (case C
-									  of (D'.Match(pats, res)) => sc (D'.Match((visibility, E)::pats, res))
+		      generateEVarFirstCase(Gbefore, 
+					    D, fn E => createLastCase(Glocal, varList@[E], D'.FClo(D'.All(Ds, F), I.Dot (D'.coerceExp E, I.id)), 
+								      fn C => (case C
+									  of (D'.Match(pats, res)) => sc (D'.Match((visibility, D'.EClo(E, D'.shiftTo(I.ctxLength Glocal, D'.id) ))::pats, res))
 									   | _ => raise Domain (* impossible *) )))
 	       | createLastCaseW (Glocal, varList, D'.All([], F), sc) = raise Domain (* impossible *)
 	       | createLastCaseW (Glocal, varList, D'.Nabla(D, F), sc)  =
 		      createLastCase (I.Decl(Glocal, D'.NonInstantiableDec D), varList, F, fn C => sc (D'.NewC(D, C, defaultFileInfo)))
 	       | createLastCaseW (Global, varList, F, sc) = raise Domain (* badly typed *)
-		  
 
+
+		      
 	     (* ABP WARNING:  abstractCase ASSUMES that it will not encounter any FVars and all EVars 
 	      * make sense with respect to the same global context.
 	      *)
                      
-	     val Crest = createLastCase (I.Null, [], extendedF, fn C => DelphinAbstract2.abstractCase C)
+	     val F_GB = case T of D'.Meta F => F | _ => raise Domain (* F_GB makes sense in Gbefore...  
+								      * we add Nabla in front to use in createLastCase
+								      *)
+	     val Crest = createLastCase (I.Null, [], extendType G2a F_GB, fn C => DelphinAbstract2.abstractCase C)
 	               handle DelphinCoverage.CoverageError s => raise Error (Paths.wrapLoc (Paths.Loc (!filename, r), "Error in WITH:  " ^ s))
 	     val extendFun = D'.Lam (Clist'@[Crest], extendedF, SOME(!filename, r))
+
+
+
 
 	     (* Compute (extendFun G2a)
 	      * For example (extendFun (x,y,u,v)) = (((extendFun \x) \y) \u) \v
@@ -3578,25 +3633,30 @@ structure DelphinElab : DELPHIN_ELABORATOR =
 	  (* Precondition is that Fresult must be of a functional type.. *)
 
 	  (* Let's first find out the real type of Clist by merging together the Alls.*)
-	  fun getType(num, F) = getTypeW(num, D'.whnfF F)
-	  and getTypeW(0, F) = raise Domain
-	    | getTypeW(n, D'.Nabla(D, F)) = D'.Nabla(D, getType(n, F))
-	    | getTypeW(n, D'.All(Ds, F)) =
+	  fun getType(num, F, needsDesugaring) = getTypeW(num, D'.whnfF F, needsDesugaring)
+	  and getTypeW(0, F, needsDesugaring) = raise Domain
+	    | getTypeW(n, D'.Nabla(D, F), needsDesugaring) = 
+	          let
+		    val (needsIt, F') = getType(n, F, needsDesugaring)
+		  in
+		    (needsIt, D'.Nabla(D, F'))
+		  end
+	    | getTypeW(n, D'.All(Ds, F), needsDesugaring) =
 	          let
 		      val num = List.length Ds
 		      val _ = if (n < num) then
 			        raise Error (Paths.wrapLoc (Paths.Loc (!filename, r), "UNEXPECTED FATAL ERROR deSugaring"))
 			      else ()
 		  in
-		    if (n = num) then D'.All(Ds, F)
+		    if (n = num) then (needsDesugaring, D'.All(Ds, F))
 		    else
-		      case D'.whnfF (getType(n-num, F))
-			of D'.All(Ds', F') => D'.All(Ds@Ds', F')
-		         | F' => raise Domain
+			case D'.whnfF (#2 (getType(n-num, F, true (* needs desugaring *))))
+			  of (D'.All(Ds', F')) => (true (* needs desugaring *), D'.All(Ds@Ds', F'))
+			   | F' => raise Domain
 		  end
 	    | getTypeW _ = raise Domain
 
-	  val ClistType = getType(numPats, Fresult)
+	  val (needsDesugaring, ClistType) = getType(numPats, Fresult, false)
 
 
 	  fun createPops(0, offset, E) = E
@@ -3637,7 +3697,10 @@ structure DelphinElab : DELPHIN_ELABORATOR =
 	    | buildCurriedFunctionW (F, _, _) = raise Error (Paths.wrapLoc (Paths.Loc (!filename, r), "UNEXPECTED FATAL ERROR deSugaring"))
 
 	in
-	  (buildCurriedFunction (Fresult, numPats, []))
+	  if needsDesugaring then 
+	    (buildCurriedFunction (Fresult, numPats, []))
+	  else
+	    DI.Lam (false, r, Clist, SOME Fresult)
 	end
 
    fun deSugarCases(smartInj, G, r, [], Fresult) = 
@@ -4550,7 +4613,26 @@ structure DelphinElab : DELPHIN_ELABORATOR =
 
 	   val Tresult = inferType (G, E')
 	   val (E', _) = updateExp(smartInj, G, E', Tresult, I.Null) (* changes approx types to exact types (fills in LF EVars) and fills in InjVars *)
-	   val E' = DelphinAbstract.abstractPatVarsExp (r, E', convert2Types (r, Tresult))
+
+	   fun isQuote (D.Quote _) = true
+	     | isQuote (D.TypeAscribe (_, E, _)) = isQuote E
+	     | isQuote _ = false
+		    (* If E is an LF term, then we will allow the
+		     * creation of a completely implicit Delphin function,
+		     * i.e. all the arguments to the function are implicit.
+		     *
+		     * This can happen if you want to lift implicit LF-Pi decs
+		     * into the meta-level.
+		     * For example,
+		     * if sig <ev_s : eval E V -> eval (s E) (s V)>
+		     * then D-- <ev_s>
+		     * will result in a Delphin function
+		     * Forall {E,V} <eval E V -> eval (s E) (s V)>
+		     * but all arguments to the function (E and V) will
+		     * be implicit.
+		     *)
+	     
+	   val E' = DelphinAbstract.abstractPatVarsExp (r, E', convert2Types (r, Tresult), isQuote E)
 	     handle DelphinAbstract.LeftOverConstraints cnstrRegL => raise Error (createConstraintsMsg cnstrRegL)
 		  | DelphinAbstract.Error (r, msg) => raise Error (Paths.wrapLoc (Paths.Loc (!filename, r), msg))
 

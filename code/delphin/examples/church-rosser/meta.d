@@ -116,12 +116,12 @@ fun dia :  <M => M'>  ->  <M => M''>  ->  <N:_> * <M' => N>  * <M'' => N>
 
 
 (* The strip lemma for parallel reduction *)
-fun strip : <M => M'> -> <M =>* M''> -> <N:_> * <M' =>* N> * <M'' => N>
-        = fn <R'> <id> => (<_>, <id>, <R'>)
-           | <R'> <R1'' | R2*''> =>
+fun strip : <M =>* M''> -> <M => M'> -> <N:_> * <M' =>* N> * <M'' => N>
+        = fn <id> <R'> => (<_>, <id>, <R'>)
+           | <R1'' | R2*''> <R'> =>
                 let
 		   val (<_>, <S1'>, <S1''>) = dia <R'> <R1''>
-                   val (<_>, <S2*'>, <S''>) = strip <S1''> <R2*''>
+                   val (<_>, <S2*'>, <S''>) = strip <R2*''> <S1''>
                 in
                    (<_>, <S1' | S2*'>, <S''>)
                 end;
@@ -130,7 +130,7 @@ fun conf : <M =>* M'> -> <M =>* M''> -> <N:_> * <M' =>* N> * <M'' =>* N>
         = fn <id> <R*''> => (<_>, <R*''>, <id>)
            | <R1' | R2*'> <R*''> =>
 		let
-		   val (<_>, <S1*'>, <S1''>) = strip <R1'> <R*''>
+		   val (<_>, <S1*'>, <S1''>) = strip <R*''> <R1'>
                    val (<_>, <S*'>, <S2*''>) = conf <R2*'> <S1*'>
                 in
 		   (<_>, <S*'>, <S1'' | S2*''>)

@@ -113,7 +113,7 @@ struct
       val s = ref ""			(* current string (line) *)
       and left = ref 0			(* position of first character in s *)
       and right = ref 0			(* position after last character in s *)
-      val _ = P.resetLines ()   	(* initialize line counter *)
+      val _ = P.resetLines ("")  	(* initialize line counter *)
 
       (* neither lexer nor parser should ever try to look beyond EOF *)
       val EOFString = String.str #"\^D"

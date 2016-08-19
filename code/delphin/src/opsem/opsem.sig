@@ -3,7 +3,7 @@
 
 signature DELPHIN_OPSEM = 
   sig
-    exception NoSolution
+    exception NoSolution of string
     val eval0 : DelphinIntSyntax.Exp -> DelphinIntSyntax.Exp
 
     val reduceCase : DelphinIntSyntax.Dec IntSyn.Ctx -> DelphinIntSyntax.Dec IntSyn.Ctx
