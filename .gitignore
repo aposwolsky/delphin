@@ -1,0 +1,7 @@
+*.cm/
+code/elphin/src/bin/
+code/delphin/bin/
+*.grm.desc
+*.grm.sig
+*.grm.sml
+*.lex.sml
