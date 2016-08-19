@@ -8,6 +8,8 @@ sig	<nf: type>
 	<a : at -> nf -> at>
 	<c : at>;
 
+params = <at>;
+
 fun subnf : <at -> nf> -> <at> -> <nf> =
  fn <[x:at] l [y:at] N x y> => (fn <Q> =>   
       case {<y:at#>} subnf <[x:at] N x y> <Q> of ({<y>}<F y> => <l F>))

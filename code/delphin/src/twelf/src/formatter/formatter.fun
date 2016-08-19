@@ -282,6 +282,12 @@ and HOVbox0 b i s l =
 
 fun Newpage() = Str(0, Np())
 
+(* Added by ABP.. Hack used in print.fun.. *)
+val empty = Ebk
+fun isEmpty Ebk = true
+  | isEmpty _ = false
+
+
 (*
 %***********************************************************************
 \subsection{Printing a {\ml format}-structure}

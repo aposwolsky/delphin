@@ -23,6 +23,6 @@ sig
   (* Apply function to all entries in unpredictable order *)
   val app : ('a entry -> unit) -> 'a Table -> unit
 
-  val save : 'a Table -> 'a Table (* ABP:  Save a copy of the table *)
-  val restore : ('a Table * 'a Table) -> unit (* ABP:  Save a copy of the table *)
+  val save : 'a Table -> 'a Table (* ABP:  Save a copy of the table.. WARNING:  not implemented everywhere *)
+  val restore : ('a Table * 'a Table) -> unit (* ABP:  Save a copy of the table.. WARNING:  not implemented everywhere *)
 end;  (* signature TABLE *)

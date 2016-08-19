@@ -130,16 +130,16 @@ fun ba : <A:o> -> <B:o> -> <comb A -> comb B> -> <comb (A ar B)>
 
 
 fun extendC : (<A:o> -> <D: nd A#> -> <comb A>) -> <B:o> -> {<x:nd B#>}{<y:comb B#>}(<A:o> -> <D: nd A#> -> <comb A>) = 
-  fn W => fn <B> => fn {<x>} {<y>} (<B> => fn x => <y>) 
-	            | [<e>] {<x>} {<u>} (<A'> => fn e => let
+  fn W => fn <B> => fn {<x>} {<y>} (<B> x => <y>) 
+	            | [<e>] {<x>} {<u>} (<A'> e => let
 							   val result = W <A'> e
 							 in
 							   {<x>}{<u>} result
 							 end \x \u);
 
 fun extendC : (<A:o> -> <D: nd A#> -> <comb A>) -> <B:o> -> {<x:nd B#>}{<y:comb B#>}(<A:o> -> <D: nd A#> -> <comb A>) = 
-  fn W => fn <B> => fn {<x>} {<y>} (<B> => fn x => <y>) 
-	            | [<e>] {<x>} {<u>} (<_> => fn e =>  let
+  fn W => fn <B> => fn {<x>} {<y>} (<B> x => <y>) 
+	            | [<e>] {<x>} {<u>} (<_> e =>  let
 							   val result = W <_> e
 							 in
 							   {<x>}{<u>} result
@@ -178,7 +178,7 @@ fun convert : _ -> <<A:o>> -> <D:nd A> -> <comb A> =
        | W <impe D1 D2> => (case ((convert W <D1>), (convert W <D2>))
 	                                      of (<U1>,<U2>) => <mp U1 U2>) 
 	     
-       | W [<x:nd A#>] <x> => W <A> x;
+       | [<x:nd A#>] W <x> => W <A> x;
 
 
 
@@ -189,8 +189,8 @@ fun convert : _ -> <<A:o>> -> <D:nd A> -> <comb A> =
 (* BUG:  Re-parsing the output complains about bad dependency! *)
 
 fun extendC : (<A:o> -> <D: nd A#> -> <comb A>) -> <B:o> -> {<x:nd B#>}{<y:comb B#>}(<A:o> -> <D: nd A#> -> <comb A>) = 
-  fn W => fn <B> => fn {<x>} {<y>} (<B> => fn x => <y>) 
-	            | [<e>] {<x>} {<u>} (<_> => fn e =>  let
+  fn W => fn <B> => fn {<x>} {<y>} (<B> x => <y>) 
+	            | [<e>] {<x>} {<u>} (<_> e =>  let
 							   val result = W <_> e
 							 in
 							   {<x>}{<u>} result
@@ -209,7 +209,7 @@ fun convert : _  -> <D:nd A> -> <comb A> =
        | W <impe D1 D2> => (case ((convert W <D1>), (convert W <D2>))
 	                                      of (<U1>,<U2>) => <mp U1 U2>) 
 	     
-       | W [<x:nd A#>] <x> => W <A> x;
+       | [<x:nd A#>] W <x> => W <A> x;
 
 val test = {<A>}{<B>} convert (fn .) <impi [u:nd A] impi [v:nd B] u> ;
 val test = {<A>} convert (fn .)  <impi [x:nd A] x> ;

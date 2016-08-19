@@ -81,7 +81,7 @@ struct
 
   and BoundVar =
       Fixed of int
-    | BVarVar of ((BoundVar option) ref * Exp * (int list)) * Sub (* (r : A, list) [t] *)
+    | BVarVar of ((BoundVar option) ref * Exp * (int list) * (Cnstr ref) list ref) * Sub (* (r : A, list, cnstrs) [t] *)
                                        (* list contains indices in the context that are parameters.
 					* this can only be unified with these indices *)
 
@@ -127,7 +127,8 @@ struct
 
   and Cnstr =				(* Constraint:                *)
     Solved                      	(* Cnstr ::= solved           *)
-  | Eqn      of Dec Ctx * Dec Ctx * Exp * Exp     (*   | Gglobal, G|-(U1 == U2)    *)
+  | Eqn      of Dec Ctx * Dec Ctx * Exp * Exp                (*   | Gglobal, G|-(U1 == U2)    *)
+  | EqnB      of Dec Ctx * Dec Ctx * BoundVar * BoundVar     (*   | Gglobal, G|-(B1 == B2)    *)
   | FgnCnstr of csid * FgnCnstr         (*         | (foreign)        *)
 
   and Status =                          (* Status of a constant:      *)
@@ -266,6 +267,24 @@ struct
     | conDecType (ConDef (_, _, _, _, V, _, _)) = V
     | conDecType (AbbrevDef (_, _, _, _, V, _)) = V
     | conDecType (SkoDec (_, _, _, V, _)) = V
+
+
+  (* conDecTypeOpt (CD) =  SOME V
+
+     Invariant:
+     If   CD is either a declaration, definition, abbreviation, or 
+          a Skolem constant
+     then SOME V is the respective type, else NONE
+
+    (* We needed this as if the user loads a Twelf file in Delphin,
+     * then suddenly there may be blocks which we just ignore by returning NONE
+    *)
+  *)
+  fun conDecTypeOpt (ConDec (_, _, _, _, V, _)) = SOME V
+    | conDecTypeOpt (ConDef (_, _, _, _, V, _, _)) = SOME V
+    | conDecTypeOpt (AbbrevDef (_, _, _, _, V, _)) = SOME V
+    | conDecTypeOpt (SkoDec (_, _, _, V, _)) = SOME V
+    | conDecTypeOpt D = NONE
 
 
   (* conDecBlock (CD) =  (Gsome, Lpi)
@@ -710,9 +729,11 @@ struct
   fun getAllTypeFams () = 
        let
 	 fun getAllTypeFams(~1) = []
-	   | getAllTypeFams k = case (targetFamOpt (conDecType (sgnLookup k)))
-	                        of NONE => k :: (getAllTypeFams (k-1))
-				 | _ => getAllTypeFams (k-1)
+	   | getAllTypeFams k = case (conDecTypeOpt (sgnLookup k))
+	                        of NONE => getAllTypeFams(k-1)
+				 | SOME cid => (case (targetFamOpt cid)
+				                of NONE => k :: (getAllTypeFams (k-1))
+						 | _ => getAllTypeFams (k-1))
        in
 	 getAllTypeFams (currentNextCid() - 1)
        end

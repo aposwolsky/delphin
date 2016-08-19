@@ -5,6 +5,7 @@ sig 	<exp  : type>
 	<app  : exp -> exp -> exp>
 	<lam  : (exp -> exp) -> exp>;
 
+params = <exp> ;
 
 fun plus : <rational> -> <rational> -> <rational>
  = fn <X> => fn <Y> => <X + Y> ;
@@ -12,7 +13,7 @@ fun plus : <rational> -> <rational> -> <rational>
 (* Count the number of bound variables *)
 
 fun cntvar : <exp> -> <rational> =
- fn [<p:exp#>] <p> => <1>
+ fn <p#> => <1>
  | <app E1 E2> => plus (cntvar <E1>) (cntvar <E2>)
  | <lam E> => case ({<p:exp#>} cntvar <E p>) of ({<p>} <N> => <N>) ;
 
@@ -24,7 +25,7 @@ val cntvar'4 = cntvar <lam [x] lam [y] x>;
 (* Count the number of lambda binders *)
 
 fun cntlam : <exp> -> <rational> =
- fn [<x:exp#>] <x> => <0>
+ fn <x#> => <0>
  | <app E1 E2> => plus (cntlam <E1>) (cntlam <E2>)
  | <lam E> => case {<p:exp#>} cntlam <E p> of ({<p>}<N> => <N + 1>) ;
 
@@ -38,10 +39,12 @@ val cntlam'4 = cntlam <lam [x] lam [y] x>;
 	Difference: a and l are dynamically introduced
 *)
 
+params = <exp>, <exp -> exp -> exp>, <(exp -> exp) -> exp> ;
+
 fun cntvar : <exp> -> <rational> =
- fn [<x#>] <x> => <1>
- | [<a#>] <a E1 E2> => plus (cntvar <E1>) (cntvar <E2>)
- | [<l#>] <l E> => case {<p:exp#>} cntvar <E p> of ({<p>}<N> => <N>) ;
+ fn <x#> => <1>
+ | <a# E1 E2> => plus (cntvar <E1>) (cntvar <E2>)
+ | <l# E> => case {<p:exp#>} cntvar <E p> of ({<p>}<N> => <N>) ;
 
 
 

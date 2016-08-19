@@ -223,10 +223,11 @@ struct
               Trail.log (globalTrail, InstantiateBlock (refB))
             )
 
-      fun  instantiateBVar (refB, B) =
+      fun  instantiateBVar (refB, B, cnstrL) =
             (
               refB := SOME(B);
-              Trail.log (globalTrail, InstantiateBVar (refB))
+              Trail.log (globalTrail, InstantiateBVar (refB));
+	      awakenCnstrs := cnstrL @ !awakenCnstrs
             )
 
     end  (* local *)
@@ -271,6 +272,8 @@ struct
 	  (* ABP:  Added undef case : == 4/27/07 *)
       | intersection (Dot (Undef, s1), Dot (Undef, s2)) =  dot1 (intersection (s1,s2))
 	  (* ABP:  But we could also do comp... *)
+
+      | intersection (t1, t2) = let fun debugAdam() = raise Domain in debugAdam() end
       (* all other cases impossible for pattern substitutions *)
 
 
@@ -368,12 +371,12 @@ struct
         (case (bvarSub (k, ss))
 	   of Undef => raise NotInvertible
 	    | Idx k' => Fixed k')
-      | invertBVar (Gglobal, G, BVarVar ((r as ref (SOME _), _, _), _), _, _) = raise Domain (* not in whnf *)
-      | invertBVar (Gglobal, G, BVarVar ((r, A, list), s1), ss, rOccur) =
+      | invertBVar (Gglobal, G, BVarVar ((r as ref (SOME _), _, _, _), _), _, _) = raise Domain (* not in whnf *)
+      | invertBVar (Gglobal, G, BVarVar ((r, A, list, cnstrs), s1), ss, rOccur) =
 	   let
 	     val _ = invertExp(Gglobal, G, (A, s1), ss, rOccur) (* just make sure it is possible, but we dont' save it *)
 	   in
-	     BVarVar((r, A, list), invertSub(Gglobal, G, s1, ss, rOccur))
+	     BVarVar((r, A, list, cnstrs), invertSub(Gglobal, G, s1, ss, rOccur))
 	   end
 
     and invertHead (Gglobal, G, BVar B, ss, rOccur) = BVar (invertBVar (Gglobal, G, B, ss, rOccur))
@@ -539,16 +542,34 @@ struct
 
     and pruneBVar (Gglobal, G, Fixed k, ss, rOccur) = 
         (case (bvarSub (k, ss))
-	   of Undef => raise Unify "Bad (probably meta-level) dependency"
+	   of Undef => raise Unify "Bad dependency"
 	    | Idx k' => Fixed k')
-      | pruneBVar (Gglobal, G, BVarVar ((r as ref (SOME _), _, _), _), _, _) = raise Domain (* not in whnf *)
-      | pruneBVar (Gglobal, G, BVarVar ((r, A, list), s1), ss, rOccur) =
-	   let
-	     val _ = pruneExp(Gglobal, G, (A, s1), ss, rOccur) (* just make sure it is possible, but we dont' save it *)
-	   in
-	     BVarVar((r, A, list), pruneSub(Gglobal, G, s1, ss, rOccur))
-	   end
+      | pruneBVar (Gglobal, G, BVarVar ((r as ref (SOME _), _, _, _), _), _, _) = raise Domain (* not in whnf *)
+      | pruneBVar (Gglobal, G, BVarVar ((r, A, list, cnstrs), s1), ss, rOccur) =
+	  let
+	     val _ = pruneExp(Gglobal, G, (A, s1), ss, rOccur) (* we must make sure it is possible.... *)
 
+	       (* pruneSubA allows the substitution to have Undefs..
+		* this is ok when attached to BVars as we do not do raising..
+		* the alternative is to do a *strengthening* of the BVarVar which doesn not 
+		* appear to be necessary....  - ABP
+		*)
+	     fun pruneSubA (Gglobal, G, s as Shift (n), ss, rOccur) =
+	       if n < ctxLength (G) 
+		 then pruneSubA (Gglobal, G, Dot (Idx (n+1), Shift (n+1)), ss, rOccur)
+	       else comp (s, ss) (* must be defined *)
+	       | pruneSubA (Gglobal, G, Dot (Idx (n), s'), ss, rOccur) =
+		 (case bvarSub (n, ss)
+		    of Undef => Dot (Undef, pruneSubA (Gglobal, G, s', ss, rOccur))
+		  | Ft => Dot (Ft, pruneSubA (Gglobal, G, s', ss, rOccur)))
+	       | pruneSubA (Gglobal, G, Dot (Exp (U), s'), ss, rOccur) =
+		    Dot (Exp (pruneExp (Gglobal, G, (U, id), ss, rOccur)),
+			 pruneSubA (Gglobal, G, s', ss, rOccur))
+	       | pruneSubA (Gglobal, G, Dot (Undef, s'), ss, rOccur) =
+		    Dot (Undef, pruneSubA (Gglobal, G, s', ss, rOccur))
+	   in
+	     BVarVar((r, A, list, cnstrs), pruneSubA(Gglobal, G, s1, ss, rOccur))
+	   end
 
     and pruneHead (Gglobal, G, BVar B, ss, rOccur) = BVar (pruneBVar (Gglobal, G, B, ss, rOccur))
       | pruneHead (Gglobal, G, H as Const _, ss, rOccur) = H
@@ -584,10 +605,10 @@ struct
 	else comp (s, ss)		(* must be defined *)
       | pruneSub (Gglobal, G, Dot (Idx (n), s'), ss, rOccur) =
 	(case bvarSub (n, ss)
-	   of Undef => raise Unify "Not prunable"
+	   of Undef => raise Unify "Not prunable" 
 	    | Ft => Dot (Ft, pruneSub (Gglobal, G, s', ss, rOccur)))
       | pruneSub (Gglobal, G, Dot (Exp (U), s'), ss, rOccur) =
-	  (* below my raise Unify *)
+	  (* below may raise Unify *)
 	  Dot (Exp (pruneExp (Gglobal, G, (U, id), ss, rOccur)),
 	       pruneSub (Gglobal, G, s', ss, rOccur))
 
@@ -639,6 +660,8 @@ struct
        Other effects: EVars may be lowered
                       constraints may be added for non-patterns
     *)
+
+
     fun unifyExpW (Gglobal, G, Us1 as (FgnExp csfe1, _), Us2) =
           (case (FgnExpStd.UnifyWith.apply csfe1 (G, EClo Us2))
              of (Succeed residualL) =>
@@ -686,7 +709,7 @@ struct
 	       else raise Unify "Bound variable clash"
 
 
-	   | (BVar (Fixed k1), BVar (BVarVar((r, A, list), s0))) => (* r is ref NONE since it is in whnf *)
+	   | (BVar (Fixed k1), BVar (BVarVar((r, A, list, cnstrs), s0))) => (* r is ref NONE since it is in whnf *)
 		 let
 		   val A' = case (ctxLookup(mergeCtx(Gglobal, G), k1))
 		            of (Dec (_, A')) => EClo(A', Shift k1)
@@ -697,11 +720,11 @@ struct
 
 		 in
 		 (case (Whnf.findIndex(k1, s0))
-		    of (SOME k') => (varExists(k', list) ; instantiateBVar(r, Fixed k') ; unifySpine(Gglobal, G, (S1, s1), (S2, s2)))
+		    of (SOME k') => (varExists(k', list) ; instantiateBVar(r, Fixed k', !cnstrs) ; unifySpine(Gglobal, G, (S1, s1), (S2, s2)))
 		     | _ => raise Unify "Bound variable (parameter) clash")
 		 end
 
-	   | (BVar (BVarVar((r, A, list), s0)), BVar (Fixed k1)) => (* r is ref NONE since it is in whnf *)
+	   | (BVar (BVarVar((r, A, list, cnstrs), s0)), BVar (Fixed k1)) => (* r is ref NONE since it is in whnf *)
 		 let
 		   val A' = case (ctxLookup(mergeCtx(Gglobal, G), k1))
 		            of (Dec (_, A')) => EClo(A', Shift k1)
@@ -711,42 +734,17 @@ struct
 
 		 in
 		   (case (Whnf.findIndex(k1, s0))
-		    of (SOME k') => (varExists(k', list) ; instantiateBVar(r, Fixed k'); unifySpine(Gglobal, G, (S1, s1), (S2, s2)))
+		    of (SOME k') => (varExists(k', list) ; instantiateBVar(r, Fixed k', !cnstrs); unifySpine(Gglobal, G, (S1, s1), (S2, s2)))
 		     | _ => raise Unify "Bound variable (parameter) clash")
 		 end
 
-	   | (BVar (B1 as BVarVar((rA,typeA,listA), sA)), BVar (B2 as BVarVar ((rB,typeB,listB), sB))) =>  (* rA and rB are both ref NONE *)
-		    (* NOTE:  I did NOT add a constraint because I do not think it will occur *)
+	   | (BVar (B1 as BVarVar((rA,typeA,listA, cnstrsA), sA)), BVar (B2 as BVarVar ((rB,typeB, listB, cnstrsB), sB))) =>  (* rA and rB are both ref NONE *)
 		    let
 		      val sA = fixSub sA
 		      val sB = fixSub sB
 
 		      val _ = unifyExp(Gglobal, G, (typeA, comp(sA, s1)), (typeB, comp(sB, s2)))
 
-		      (* NOT SURE ABOUT THIS ANYMORE.. - ABP 
-		      (* rA[sA] = rB[sB] *)
-		      (* However, as rA must be instantiated with an index (and always substituted with an index?)
-		       * we can throw out everything in sA (and sB) which is not an index.
-		       *)
-		      
-	              (* WARNING:  If "idx k" changes to "idx B" then we need to do occurs checks *)
-		      fun throwOut(Shift i) = Shift i
-			| throwOut(Dot (Idx k, t)) = Dot(Idx k, throwOut t)
-			| throwOut(Dot (Exp U, t)) = 
-			      (* this may be unnecessary.. it should be an Idx *)
-			    	   let 
-				     val nOpt = SOME(Whnf.etaContract U)
-				       handle Whnf.Eta => NONE
-				   in
-				     case nOpt
-				       of (SOME n') => Dot (Idx n', throwOut t)
-					| _ => Dot (Undef, throwOut t)
-				   end
-			| throwOut(Dot (_, t)) = Dot (Undef, throwOut t)
-
-		      val sA = throwOut sA
-		      val sB = throwOut sB
-			*)
 		    in
 		      if (rA = rB) then
 			if Whnf.isPatSub(sA) then
@@ -763,25 +761,22 @@ struct
 				 * Gnew |- sA o (s' Inverse) : G1 
 				 *)
 			      else 
-				(*
-				let
-				  val ss' = Whnf.invert s'
-				  val typeA' = pruneExp(Gglobal, G, (typeA, sA), ss', ref NONE)
-				in
-				  instantiateBVar(rA, BVarVar((ref NONE, typeA'), s'))
-				end 
-				 *)
-				raise Unify "Bound variable ambiguity (we need to finish this case)"
+				addConstraint (cnstrsA, ref (EqnB (Gglobal, G, B1, B2)))
 			    end
-			  else raise Unify "Bound variable ambiguity (we need to add constraints)"
-			else raise Unify "Bound variable ambiguity (we need to add constraints)"
+			  else addConstraint (cnstrsA, ref (EqnB (Gglobal, G, B1, B2)))
+			else addConstraint (cnstrsA, ref (EqnB (Gglobal, G, B1, B2)))
 		      else
 			if Whnf.isPatSub(sA) then
-			      let val (B2', _(* id *)) = Whnf.whnfBVar (B2, Whnf.invert sA) in (instantiateBVar(rA, B2')) end
+			  (* NOTICE that we do NOT need to worry about assigning rA to something where rA 
+			   * occurs inside it.. the reason is that we can only assign rA to other variable r'
+			   * or to a Fixed k.  Therefore, we do not need to do an occurs check for it!
+			   *)
+			      let val B2' = pruneBVar (Gglobal, G, B2, Whnf.invert sA, ref NONE) in (instantiateBVar(rA, B2', !cnstrsA)) end
 			else if Whnf.isPatSub(sB) then
-			      let val (B1', _(* id *)) = Whnf.whnfBVar (B1, Whnf.invert sB) in (instantiateBVar(rB, B1')) end
+			      let val B1' = pruneBVar (Gglobal, G, B1, Whnf.invert sB, ref NONE) in (instantiateBVar(rB, B1', !cnstrsB)) end
 			else
-			  raise Unify "Bound variable ambiguity (we need to add constraints)"			    
+			  (addConstraint (cnstrsA, ref (EqnB (Gglobal, G, B1, B2))) ;
+			  addConstraint (cnstrsB, ref (EqnB (Gglobal, G, B1, B2))))
 		    end
 
 		 
@@ -1159,6 +1154,11 @@ struct
       | awakeCnstr (SOME(cnstr as ref (Eqn (Gglobal, G, U1, U2)))) =
           (solveConstraint cnstr;
            unify1 (Gglobal, G, (U1, id), (U2, id)))
+
+      | awakeCnstr (SOME(cnstr as ref (EqnB (Gglobal, G, B1, B2)))) =
+          (solveConstraint cnstr;
+           unify1 (Gglobal, G, (Root(BVar B1, Nil), id), (Root(BVar B2, Nil), id)))
+
       | awakeCnstr (SOME(ref (FgnCnstr csfc))) =
           if (FgnCnstrStd.Awake.apply csfc ()) then ()
           else raise Unify "Foreign constraint violated"
@@ -1199,6 +1199,7 @@ struct
     val invertExp = invertExp
     val weakenSub = weakenSub
     val pruneExp = pruneExp
+    val pruneBVar = pruneBVar
 
 
     fun invertible (G, Us, ss, rOccur) =

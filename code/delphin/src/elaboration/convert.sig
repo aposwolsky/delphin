@@ -8,6 +8,9 @@ signature DELPHIN_ELABORATOR =
     val reset : metaSignature ref -> unit
     val setFilename : string -> unit
     val getFilename : unit -> string
+    val setWorld : DelphinIntSyntax.World -> unit
+    val getWorld : unit -> DelphinIntSyntax.World
+    val enableCoverage : bool ref (* to be linked with delphin.fun *)
 
     val convertMeta0 : bool  * DelphinIntSyntax.decCtx * DelphinExtSyntax.Exp
                        -> DelphinIntSyntax.Exp * DelphinIntSyntax.Types
@@ -23,12 +26,12 @@ signature DELPHIN_ELABORATOR =
     val convertWorld : DelphinExtSyntax.WorldDeclaration -> DelphinIntSyntax.World
 
     val saveData : unit
-          -> string * int * DelphinApprox.Formula StringRedBlackTree.Table * 
+          -> DelphinIntSyntax.World * string * int * (string * DelphinApprox.Formula) StringRedBlackTree.Table * 
              (int * DelphinIntSyntax.Formula) StringRedBlackTree.Table * 
              DelphinIntSyntax.decCtx
 
     val restoreData : 
-          string * int * DelphinApprox.Formula StringRedBlackTree.Table * 
+          DelphinIntSyntax.World * string * int * (string * DelphinApprox.Formula) StringRedBlackTree.Table * 
           (int * DelphinIntSyntax.Formula) StringRedBlackTree.Table * 
           DelphinIntSyntax.decCtx
           -> unit

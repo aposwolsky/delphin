@@ -1,0 +1,20 @@
+First-Order Logic
+Fragment with implication, negation, universal quantification.
+
+Author: Adam Poswolsky
+(converted from Twelf version by Frank Pfenning)
+
+This code is based on the article
+
+  Logical Frameworks
+  Handbook of Automated Reasoning
+  Alan Robinson and Andrei Voronkov, editors
+  Chapter XXI
+  Elsevier Science and MIT Press
+  In preparation
+
+This article is available at
+
+  http://www.cs.cmu.edu/~fp/www/papers/handbook00.ps
+  http://www.cs.cmu.edu/~fp/www/papers/handbook00.pdf
+

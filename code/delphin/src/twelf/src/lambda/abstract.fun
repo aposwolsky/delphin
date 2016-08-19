@@ -191,7 +191,7 @@ struct
        All abstractions are potentially dependent.
     *)
     fun raiseType (I.Null, V) = V
-      | raiseType (I.Decl (G, I.NDec), V) = raise Domain (* raiseType (G, I.EClo(V, I.shift)) *)
+      | raiseType (I.Decl (G, I.NDec), V) = raise Domain
       | raiseType (I.Decl (G, D), V) = raiseType (G, I.Pi ((D, I.Maybe), V))
 
     (* raiseTerm (G, U) = [[G]] U
@@ -203,7 +203,7 @@ struct
        All abstractions are potentially dependent.
     *)
     fun raiseTerm (I.Null, U) = U
-      | raiseTerm (I.Decl (G, I.NDec), U) = raise Domain (* raiseTerm (G, I.EClo(U, I.shift)) *)
+      | raiseTerm (I.Decl (G, I.NDec), U) = raise Domain 
       | raiseTerm (I.Decl (G, D), U) = raiseTerm (G, I.Lam (D, U))
 
     (* collectExpW (G, (U, s), K) = K'

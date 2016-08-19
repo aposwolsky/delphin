@@ -5,7 +5,6 @@ Library
   structure Print
   structure PrintDelphinExt
   structure PrintDelphinInt	
-  structure UnifyDelphinOpsemTrail
   structure UnifyDelphinNoTrail
   structure UnifyDelphinTrail
   structure NormalizeDelphin
@@ -13,7 +12,12 @@ Library
   structure DelphinAbstract
   structure DelphinAbstract2
   structure WorldSubsumption
+  structure DelphinTypeCheck
+  structure WorldChecker
+  structure DelphinStrictness
   structure DelphinCoverage
+  structure DelphinOpsem
+  structure DelphinTermination
 is
 #if defined(NEW_CM)
   $/basis.cm
@@ -39,4 +43,11 @@ is
   abstract.sml  
   abstract2.fun
   world.fun
+  ../typecheck/typecheck.sig
+  ../typecheck/typecheck.fun
+  worldChecker.fun
+  strict.sml
   coverage.fun
+   ../opsem/opsem.sig
+   ../opsem/opsem.fun
+  terminate.sml

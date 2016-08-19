@@ -28,8 +28,6 @@ is
 
    ../elaboration/sources.syntax.cm
    ../elaboration/sources.cm
-   ../typecheck/sources.cm
-   ../opsem/sources.cm
 
    ml-yacc-lib-mod/sources.cm
    LFparsing.sml   

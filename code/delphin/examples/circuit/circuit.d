@@ -12,6 +12,8 @@ sig	<circuit : type>
 	<nandgate : pin -> pin -> pin -> circuit>
 	<notgate : pin -> pin -> circuit>;
 
+params = <pin>;
+
 fun add  = fn <X> => fn <Y> => <X + Y> ;
 fun mult  = fn <X> => fn <Y> => <X * Y> ;
 
@@ -79,7 +81,7 @@ val nf1 : <bool>
 
 val nf2 : <bool>
  = nandfree flipflop2 ;
-
+params = .;
 
 fun sat : <circuit> -> <rational> =
  fn <andgate one one one> => <1>

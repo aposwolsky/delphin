@@ -5,6 +5,8 @@ sig	<nat : type>
 	<z : nat>
 	<s : nat -> nat>;
 
+params = .;
+
 fun plus : <nat> -> <nat> -> <nat> =
  fn <z> => (fn <Y> => <Y>)
  | <s X> => (fn <Y> => <s> @ (plus <X> <Y>)) ;

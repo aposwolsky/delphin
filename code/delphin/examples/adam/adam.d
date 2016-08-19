@@ -27,10 +27,10 @@ fun convert : <<A : o>> -> <D : nd A> -> <comb A> =
                                                                                              ba <X1> <X2> <[x:comb X1] D'' x>))
                                                            ({<d : nd X1#>} {<u : comb X1#>} convert <D' d>));
 
-fun convert : <A : o> -> <D : nd A> -> <comb A> = 
+fun convert : (<A : o> and <D : nd A>) -> <comb A> = 
    fn [<X1 : o>] [<X2 : o>] [<D' : nd X1 -> nd X2>] (<_> and <impi ([x:nd X1] D' x)> =>
                                                         (fn [<D'' : comb X1 -> comb X2>] ({<d : nd X1#>} {<u : comb X1#>} <D'' u> =>
                                                                                              ba <X1> <X2> <[x:comb X1] D'' x>))
-                                                           ({<d : nd X1#>} {<u : comb X1#>} convert <_> <D' d>)) ;
+                                                           ({<d : nd X1#>} {<u : comb X1#>} convert (<_> and <D' d>))) ;
 
 

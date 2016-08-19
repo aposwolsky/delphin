@@ -118,8 +118,8 @@ sig <comb : o -> type>
 
 type convParamFun = (<A:o> -> <D: nd A#> -> <comb A>);
 fun extendC : convParamFun -> <B:o> -> {<x:nd B#>}{<y:comb B#>}convParamFun = 
-  fn W => fn <B> => fn {<x>} {<y>} (<B> => fn x => <y>) 
-	            | [<e>] {<x>} {<u>} (<_> => fn e =>  let
+  fn W => fn <B> => fn {<x>} {<y>} (<B>  x => <y>) 
+	            | [<e>] {<x>} {<u>} (<_> e =>  let
 							   val result = W <_> e
 							 in
 							   {<x>}{<u>} result
@@ -138,7 +138,7 @@ fun convert : convParamFun  -> <D:nd A> -> <comb A> =
        | W <impe D1 D2> => (case ((convert W <D1>), (convert W <D2>))
 	                                      of (<U1>,<U2>) => <MP U1 U2>) 
 	     
-       | W [<x:nd A#>] <x> => W <A> x;
+       | [<x:nd A#>] W <x> => W <A> x;
 
 val testConvert1 = {<A>}{<B>} convert (fn .) <impi [u:nd A] impi [v:nd B] u> ;
   (* evaluates to  {<A : o#>} {<B : o#>} <MP (MP S (MP K K)) (MP (MP S K) K)> *)

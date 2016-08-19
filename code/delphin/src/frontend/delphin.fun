@@ -8,7 +8,6 @@ struct
   exception Error of string
 
   structure I = IntSyn
-  structure T = Twelf
   structure D = DelphinExtSyntax
   structure D'= DelphinIntSyntax (* What we are converting to *)
   structure C = DelphinElab
@@ -17,14 +16,28 @@ struct
   structure LS = Stream    
 
   local
-    val version = "Delphin, Release Version 1.3.3, November 01, 2007"
+    val version = "Delphin, Release Version 1.5.0, April 20, 2008"
 
     val debug = ref false
-    val enableCoverage = ref false
-    val enableWorlds = ref false
+    val enableCoverage = C.enableCoverage (* default is set in convert.fun to true *)
+                                          (* We use an enableCoverage flag in convert.fun
+					   * so it will NOT use Nab{W} or New{W} when enableCoverage=false,
+					   * This way it corresponds to the base type system.
+					   *)
+    val enableTermination = ref true
+    val stopOnWarning = ref false
     val pageWidth = Formatter.Pagewidth
     val parseDebug = ref false
     val smartInj = ref true
+    val printPatternVars = ref false (* makes things look cleaner when they are off.. in my opinion... *)
+    val printImplicit = Print.implicit (* Linked to the LF printer, which
+					* uses this bool ref to determine
+					* whether to print implicit args.
+					*)
+    val doubleCheck = ref false
+    (*
+    val tripleCheck = ref false
+      *)
 
     val metaSig = ref (nil : (string * DelphinApprox.Formula * D'.Formula) list)  (* for type aliasing *)
 
@@ -37,6 +50,9 @@ struct
     val startDir = ref (OS.FileSys.getDir())
 
 
+    fun stop (s) =
+      if (!stopOnWarning) then raise Error ("\n" ^ s ^ "\nTo continue with warnings you must set Delphin.stopOnWarning := false") else print ("\n" ^ s ^ "\n\n")
+      
     fun chDir(s) =
       (* adds a check if s is empty before changing directory *)
       if (s = "") then ()
@@ -118,7 +134,7 @@ struct
 	     val firstLine = "val " ^ s ^ " : " ^ T ^ "\n" 
 	     val secondLineHead = spaceString(String.size(s)) ^ " = "
 
-	     val expFormat = PrintDelphinInt.expToFormat(I.Null, E, !smartInj, !debug)
+	     val expFormat = PrintDelphinInt.expToFormat(I.Null, E, !smartInj, !debug, !printPatternVars)
 
 	     val format = Formatter.HVbox [Formatter.String(secondLineHead), expFormat]
 	     val result = firstLine ^ (Formatter.makestring_fmt format) ^ "\n"
@@ -195,7 +211,7 @@ struct
 	     handle Subordinate.Error (msg) => raise Error ("LF Error:  " ^ msg)
 	   end
 
-    fun convertAndEvaluate(G, t, w, (D.Use s)) = 
+    fun convertAndEvaluate(G, t, (D.Use s)) = 
            let
 	     val _ = freezeSignature() 
 	     fun isDelim c = if ((c = #"\"") orelse (c = #" ")) then true else false
@@ -240,24 +256,25 @@ struct
 	                  handle _ => (restoreOld() ; raise Error ("Bad Directory: " ^ (!dirPrefix) ^ "\n\n"))
 
 
-
+	     val w = C.getWorld()
 	     val _ = C.reset(metaSig)			     
 	     val _ = C.setFilename(displayFname)
+	     val _ = C.setWorld(w)
 
 	     val res = ((Parse.fparse (displayFname, fname))
 			handle DelphinParser.ParseError => (restoreOld() ; raise Error "Error Parsing File\n\n")
 			     | _ => (restoreOld() ; raise Error "Error Parsing File\n\n"))
 
-	     val final = convertAndEvaluateList(G, t, w, res)
-	                 handle _ => raise Domain (* should not throw any exceptions.. caught in convertAndEvaluate *)
+	     val (success, final) = convertAndEvaluateList(G, t, res)
+
 	     val _ = restoreOld()
 
 	   in
-	     final
+	     (success, final)
 	   end
 
 	 
-       | convertAndEvaluate(G, t, w, (D.LFUse s)) = 
+       | convertAndEvaluate(G, t, (D.LFUse s)) = 
 	   let
 	     fun isDelim c = if ((c = #"\"") orelse (c = #" ")) then true else false
              val tokens = String.tokens isDelim s
@@ -306,11 +323,11 @@ struct
 	     val _ = Global.chatter := 0
 	     val _ = restoreData()
 	   in
-	     (G, t, w)	     
+	     (true, (G, t))
 	   end
 			    
 
-      | convertAndEvaluate (G, t, w, (D.LFTypeConstant (r,s,k, nameO, precO))) = 
+      | convertAndEvaluate (G, t, (D.LFTypeConstant (r,s,k, nameO, precO))) = 
 		let
 		  val _ = convertTypeConstant (r,s,k)
 		  val _ = case (nameO)
@@ -326,11 +343,11 @@ struct
 		  val _ = print ";\n" 
 		    *)
 		in
-		  (G, t, w)
+		  (true, (G, t))
 		end
 
 
-      | convertAndEvaluate (G, t, w, (D.LFObjectConstant (r, lfdec, precO))) =
+      | convertAndEvaluate (G, t, (D.LFObjectConstant (r, lfdec, precO))) =
 		let
 		  val _ = convertObjectConstant (lfdec)
 		  val D.LFDec(_, sOpt, _)   = lfdec
@@ -345,13 +362,13 @@ struct
 		  val _ = print ";\n"
 		    *)
 		in
-		  (G, t, w)
+		  (true, (G, t))
 		end
 
-      | convertAndEvaluate (G, t, w, (D.LFDef (r, lfdec, lfterm, false, precO))) =
+      | convertAndEvaluate (G, t, (D.LFDef (r, lfdec, lfterm, false, precO))) =
 		let
 		  val dectoks = PrintDelphinExt.lfdecToTokens0 lfdec
-		  val _ = addToSignature(dectoks @  [(L.EQUAL,r)] @ (PrintDelphinExt.lftermToTokens(lfterm)) )
+		  val _ = addToSignature(dectoks @  [(L.EQUAL,r)] @ (PrintDelphinExt.lfexpToTokens(lfterm)) )
 
 		  val D.LFDec(_, sOpt, _) = lfdec
 		  val s = case sOpt of
@@ -362,14 +379,14 @@ struct
 		          of NONE => ()
 			   | SOME (i) => ((*  print (" ") ;*)  convertPrec(i, s))
 		in	
-		  (G, t, w)
+		  (true, (G, t))
 		end
 
 
-      | convertAndEvaluate (G, t, w, (D.LFDef (r, lfdec, lfterm, true, precO))) =
+      | convertAndEvaluate (G, t, (D.LFDef (r, lfdec, lfterm, true, precO))) =
 		let
 		  val dectoks = PrintDelphinExt.lfdecToTokens0 lfdec
-		  val _ = addToSignatureAbbrev(dectoks @  [(L.EQUAL,r)] @ (PrintDelphinExt.lftermToTokens(lfterm)) )
+		  val _ = addToSignatureAbbrev(dectoks @  [(L.EQUAL,r)] @ (PrintDelphinExt.lfexpToTokens(lfterm)) )
 
 		  val D.LFDec(_, sOpt, _) = lfdec
 		  val s = case sOpt of
@@ -380,17 +397,18 @@ struct
 		          of NONE => ()
 			   | SOME (i) => ((*  print (" ") ;*)  convertPrec(i, s))
 		in	
-		  (G, t, w)
+		  (true, (G, t))
 		end
 
 
-      | convertAndEvaluate (G, t, w, D.TypeDef (r, name, F)) = 
+      | convertAndEvaluate (G, t, D.TypeDef (r, name, F)) = 
            let
 	      val resultO = ( SOME(C.convertFormula0 (G, F))
 		handle Names.Error s => (raise Error (s ^ "\n\n"))
 		     | ReconTerm.Error s => (raise Error ( s ^ "\n\n"))
 		     | Error s => (raise Error ( s ^ "\n\n"))
 		     | C.Error s => (raise Error ( s ^ "\n\n") )
+		     | Subordinate.Error s => (raise Error ( s ^ "\n\n") )
 (* ABP:  Should we catch all errors? 
 		     | _=> (raise Error ( "Error! (ABP:  Add Details)" ^ "\n\n"))
 *)
@@ -398,13 +416,13 @@ struct
 
 	   in
 	       case resultO
-		  of NONE => (G, t, w)
+		  of NONE => (false, (G, t))
 		   | SOME (FA, F') => (print ("[\"" ^ name ^ "\" Added as Type Alias...]\n\n" );
-				 (metaSig := (name,FA,F') :: (!metaSig)) ; (G, t, w))
+				 (metaSig := (name,FA,F') :: (!metaSig)) ; (true, (G, t)))
 	   end
 
 
-      | convertAndEvaluate (G, t, w, (E as D.MetaFix L)) =
+      | convertAndEvaluate (G, t, (E as D.MetaFix L)) =
 	    let
 	      val _ = freezeSignature()
 	      fun find(x:string, []) = false
@@ -431,7 +449,7 @@ struct
 
 
 
-	      val _ = if !parseDebug then (print "\n-----BEGIN EXTERNAL SYNTAX-----\n" ; print (PrintDelphinExt.topDecStr (D.MetaFix L)) ; print "\n-----END EXTERNAL SYNTAX-----\n") else ()
+	      val _ = if !parseDebug then (print "\n-----BEGIN EXTERNAL SYNTAX-----\n" ; print (PrintDelphinExt.topDecStr (D.MetaFix L, true (* print eps *))) ; print "\n-----END EXTERNAL SYNTAX-----\n") else ()
 
 
 	      val resultO = (SOME (C.convertFixList0(!smartInj, G, L))
@@ -439,6 +457,7 @@ struct
 		     | ReconTerm.Error s => (raise Error ( s ^ "\n\n") )
 		     | Error s => (raise Error ( s ^ "\n\n") )
 		     | C.Error s => (raise Error ( s ^ "\n\n") )
+		     | Subordinate.Error s => (raise Error ( s ^ "\n\n") )
 			     (* ABP:  Should we catch all errors?
 		     | _=> (raise Error ( "Error! (ABP:  Add Details)" ^ "\n\n"))
 			      *)
@@ -446,45 +465,79 @@ struct
 
 	    in
 	      (case resultO 
-		 of NONE => (G, t, w)
+		 of NONE => (false, (G, t))
 	          | SOME (result') => 
 		           let 
-			     (* fill in the world to be the current world "w" *)
-			     val result' = WorldSubsumption.fillInWorldExp (w, result')
+			     val _ = if !parseDebug then (print "\n-----BEGIN INTERNAL SYNTAX (smartInj = false, debug = true, printPatternVars = true)-----\n" ; print (PrintDelphinInt.topFixToString(G, result', false, true, true)) ; print "\n-----END INTERNAL SYNTAX (smartInj = false, debug = true, printPatternVars = true)-----\n\n") else ()
 
-			     val _ = if !parseDebug then (print "\n-----BEGIN INTERNAL SYNTAX (smartInj = false, debug = true)-----\n" ; print (PrintDelphinInt.topFixToString(G, result', false, true)) ; print "\n-----END INTERNAL SYNTAX (smartInj = false, debug = true)-----\n\n") else ()
-
-			     val Ddomain = (case D'.whnfE(result')
-					      of D'.Fix(D, E) => D
-					    | _ => raise Domain)
-			     val _ = print (PrintDelphinInt.topFixToString(G, result', !smartInj, !debug))
-			     val V = D'.substE'(result', t)
-
-                             (* Coverage Checking *)
-			     val _ = if (!enableCoverage) then 
-			            (DelphinCoverage.checkCovers(!smartInj, w, G, result')
-				    handle DelphinCoverage.Error s => ((print (s ^ "\n\n"))))
-				     else ()
+				  
+                             (* Strictness *)
+			     val _ = DelphinStrictness.check(!smartInj, !printPatternVars, G, result')
+			       handle DelphinStrictness.NotStrictError s => raise Error s (* Always quit on strictness error *)
+                             
+			     (* Coverage Checking *)
+			     val _ = if (!enableCoverage) then
+			             ((DelphinCoverage.checkCovers(!smartInj, !printPatternVars, G, result') ; ())
+				      handle DelphinCoverage.CoverageError s => stop s)
+				     else
+				       ()
 
 			     (* World Checking *)
-			     val _ = if (!enableWorlds) then
-			             (WorldSubsumption.checkWorld(G, w, result')
-			                 handle WorldSubsumption.Error s => (print (s ^ "\n\n")))
+			     val _ = if (!enableCoverage) then
+			                    (WorldChecker.worldCheck(C.getFilename(), r, G, result')
+					       handle WorldChecker.Error s => stop s)
 				     else ()
 
+			     val _ = if !parseDebug then (print "\n-----BEGIN INTERNAL SYNTAX (smartInj = false, debug = true, printPatternVars = true)-----\n" ; print (PrintDelphinInt.topFixToString(G, result', false, true, true)) ; print "\n-----END INTERNAL SYNTAX (smartInj = false, debug = true, printPatternVars = true)-----\n\n") else ()
+
+
+                             (* Type checking *)
+			     val _ = if (!doubleCheck) then
+			         ((DelphinTypeCheck.inferType(G, result') ; ())
+				  handle DelphinTypeCheck.Error s => raise Error ("Doublecheck Failed!  BUG IN DELPHIN!:  " ^ s))
+				 else ()
+
+
+			     (* Termination checking *)
+			     val _ = if (!enableTermination) then
+			             ((DelphinTermination.check(!debug, !smartInj, !printPatternVars, C.getFilename(), r, G, result') ; ())
+				      handle DelphinTermination.Error s => ((stop s)))
+				     else
+				       ()
+
+
+			     val Ddomain = (case D'.whnfE(result')
+					      of D'.Fix (D, E) => D
+					    | _ => raise Domain)
+
+			     val _ = print (PrintDelphinInt.topFixToString(G, result', !smartInj, !debug, !printPatternVars))
+
+
+			     val V = D'.substE'(result', t)
+
+
+			     (*
+                             (* Type checking *)
+			     val _ = if (!tripleCheck) then
+			         ((DelphinTypeCheck.inferType(I.Null, V) ; ())
+				  handle DelphinTypeCheck.Error s => raise Error ("Triplecheck Failed!  BUG IN DELPHIN!:  " ^ s))
+				 else ()
+                             *)
+
+
 			   in
+			     (true, 
 			        (I.Decl(G, (D'.InstantiableDec Ddomain)), 
-				 D'.Dot(D'.Prg V, t), 
-				 w)
+				 D'.Dot(D'.Prg V, t)))
 			   end
 		)
 	    end
 
 
-      | convertAndEvaluate (G, t, w, (D.MetaVal (r, sO, term))) =
+      | convertAndEvaluate (G, t, (D.MetaVal (r, sO, term))) =
 	    let
 	      val _ = freezeSignature()
-	      val _ = if !parseDebug then (print "\n-----BEGIN EXTERNAL SYNTAX-----\n" ; print (PrintDelphinExt.expToStr (term, true)) ; print "\n-----END EXTERNAL SYNTAX-----\n") else ()
+	      val _ = if !parseDebug then (print "\n-----BEGIN EXTERNAL SYNTAX-----\n" ; print (PrintDelphinExt.expToStr (term, true, true (* print pattern vars *))) ; print "\n-----END EXTERNAL SYNTAX-----\n") else ()
 
 
 
@@ -493,6 +546,7 @@ struct
 		     | ReconTerm.Error s => (raise Error ( s ^ "\n\n") )
 		     | Error s => (raise Error ( s ^ "\n\n") )
 		     | C.Error s => (raise Error ( s ^ "\n\n"))
+		     | Subordinate.Error s => (raise Error ( s ^ "\n\n"))
 (* ABP:  Should we catch all errors?
 		     | _=> (raise Error ( "Error! (ABP:  Add Details)" ^ "\n\n"))
 *)
@@ -500,12 +554,9 @@ struct
 
 	    in
 	      (case resultO
-		 of NONE => (G, t, w)
+		 of NONE => (false, (G, t))
 		  | SOME (result', T) => 
 	                let
-			  (* fill in the world to be the current world "w" *)
-			  val result' = WorldSubsumption.fillInWorldExp (w, result')
-			  val T = WorldSubsumption.fillInWorldTypes (w, T)
 
 			  val s = (case sO
 				     of NONE => "it"
@@ -513,73 +564,119 @@ struct
 
 			  val Ddomain = D'.NormalDec(SOME [s], T)
 
-			  val _ = if !parseDebug then (print "\n-----BEGIN INTERNAL SYNTAX (smartInj = false, debug = true)-----\n" ; print (PrintDelphinInt.expToString(G, result', false, true)) ; print "\n-----END INTERNAL SYNTAX (smartInj = false, debug = true)-----\n\n") else ()
+			  val _ = if !parseDebug then (print "\n-----BEGIN INTERNAL SYNTAX (smartInj = false, debug = true, printPatternVars = true)-----\n" ; print (PrintDelphinInt.expToString(G, result', false, true, true)) ; print "\n-----END INTERNAL SYNTAX (smartInj = false, debug = true, printPatternVars = true)-----\n\n") else ()
 			    
+
+
+			  (* Strictness *)
+			  val _ = DelphinStrictness.check(!smartInj, !printPatternVars, G, result')
+			       handle DelphinStrictness.NotStrictError s => raise Error s (* Always quit on strictness error *)
+                             
 			  (* Coverage Checking *)
 			  val _ = if (!enableCoverage) then
-			           (DelphinCoverage.checkCovers(!smartInj, w, G, result')
-				   handle DelphinCoverage.Error s => (raise Error (s ^ "\n\n")))
+			             ((DelphinCoverage.checkCovers(!smartInj, !printPatternVars, G, result') ; ())
+				      handle DelphinCoverage.CoverageError s => ((stop s)))
+				     else
+				       ()
+
+                          (* World Checking *)
+                          val _ = if (!enableCoverage) then
+			                (WorldChecker.worldCheck(C.getFilename(), r, G, result')
+					 handle WorldChecker.Error s => stop s)
 				  else ()
 
-			  (* World Checking *)
-			  val _ = if (!enableWorlds) then
-			          (WorldSubsumption.checkWorld(G, w, result')
-				  handle WorldSubsumption.Error s => (raise Error (s ^ "\n\n")))
-				  else
-				    ()
+				       
+
+			  (* Type checking *)
+			  val _ = if (!doubleCheck) then
+			         ((DelphinTypeCheck.checkType(G, result', T) ; ())
+				  handle DelphinTypeCheck.Error s => raise Error ("Doublecheck Failed!  BUG IN DELPHIN!:  " ^ s))
+				  else ()
+
+
+                          (* Termination checking *)
+			  val _ = if (!enableTermination) then
+			             ((DelphinTermination.check(!debug, !smartInj, !printPatternVars, C.getFilename(), r, G, result') ; ())
+				      handle DelphinTermination.Error s => ((stop s)))
+				     else
+				       ()
+
+
+			  val result = D'.substE'(result', t)
+
+
+                          (*
+			  (* Type checking *)
+			  val _ = if (!tripleCheck) then
+			           ((DelphinTypeCheck.checkType(I.Null, result, D'.substTypes(T, D'.coerceSub t)) ; ())
+				    handle DelphinTypeCheck.Error s => raise Error ("Triplecheck Failed!  BUG IN DELPHIN!:  " ^ s))
+				 else ()
+                          *)
+
 			    
+			  val Vopt = eval result
+
+			  val _ = print (solutionToString(s, PrintDelphinInt.typeToString(G, T, !smartInj), Vopt))
+
+			  val _ = case Vopt of 
+			           NONE => raise Error (Paths.wrapLoc(Paths.Loc (C.getFilename(),r),"Match Non-Exhaustive Failure"))
+				   | _ => ()
+
 			in
-			  (* if isWorldCorrect then  *)
-			        let
-				  val result = D'.substE'(result', t)
-
-				  val Vopt = eval result
-
-				  val _ = print (solutionToString(s, PrintDelphinInt.typeToString(G, T, !smartInj), Vopt))
-
-				  val _ = case Vopt of 
-				          NONE => raise Error (Paths.wrapLoc(Paths.Loc (C.getFilename(),r),"Match Non-Exhaustive Failure"))
-					   | _ => ()
-				in
-				  case Vopt
-				    of NONE => (G, t, w)
-
-				  | SOME V' => (I.Decl(G, (D'.InstantiableDec Ddomain)), 
-						D'.Dot(D'.Prg V', t), 
-						w)
-				end
-			  (* else  (G, t, w)  *)
+			  case Vopt
+			      of NONE => (false, (G, t))
+				
+			       | SOME V' => (true, 
+					     (I.Decl(G, (D'.InstantiableDec Ddomain)), 
+					      D'.Dot(D'.Prg V', t)))
 			end
 		)
 	    end
 
 
-      | convertAndEvaluate(G, t, w, D.WorldDec Wnew) = 
-	    ((G, t, C.convertWorld Wnew) 
+      | convertAndEvaluate(G, t, D.WorldDec Wnew) = 
+	    let
+	      val w = C.convertWorld Wnew
 		handle Names.Error s => (raise Error (s ^ "\n\n"))
 		     | ReconTerm.Error s => (raise Error ( s ^ "\n\n") )
 		     | Error s => (raise Error ( s ^ "\n\n"))
 		     | C.Error s => (raise Error ( s ^ "\n\n"))
+		     | Subordinate.Error s => (raise Error ( s ^ "\n\n"))
 			     (* ABP:  Should we catch all errors?
 		     | _=> (raise Error ( "Error! (ABP:  Add Details)" ^ "\n\n") )
 			      *)
-			     )
+
+	      fun checkSubord (D'.Anything) = ()
+		| checkSubord (D'.VarList []) = ()
+		| checkSubord (D'.VarList ((_, V) :: vars)) = 
+		            let
+			      val _ =  Subordinate.respects (V, I.id)
+				handle Subordinate.Error s => (raise Error ("Cannot set params!:  " ^ s ^ "\n\n"))
+			    in
+			      checkSubord (D'.VarList vars)
+			    end
+	      val _ = checkSubord w
+	    in
+	      (C.setWorld w ; 
+	      (true, (G, t)))
+	    end
 
 	  
 
-    and convertAndEvaluateList(G, t, w, []) = (G, t, w)
+    and convertAndEvaluateList(G, t, []) = (true (* no errors *), (G, t))
 
-      | convertAndEvaluateList(G, t, w, x::xs) =
+      | convertAndEvaluateList(G, t, x::xs) =
             let
-	      val (success, (G', t', w')) = (true, convertAndEvaluate(G,t,w,x))
-	        handle Error s => (print (s ^ "\n\n") ; (false, (G,t,w)) )
-		     | Names.Error s => (print (s ^ "\n\n") ; (false, (G,t,w)) )
-		     | ReconTerm.Error s => (print (s ^ "\n\n") ; (false, (G,t,w)))
+	      val (success, (G', t')) = convertAndEvaluate(G,t,x)
+	        handle Error s => (print (s ^ "\n\n") ; (false, (G,t)) )
+		     | Names.Error s => (print (s ^ "\n\n") ; (false, (G,t)) )
+		     | Subordinate.Error s => (print (s ^ "\n\n") ; (false, (G,t)) )
+		     | ReconTerm.Error s => (print (s ^ "\n\n") ; (false, (G,t)))
 	    in
 	      if success then 
-		convertAndEvaluateList(G', t', w', xs)
+		convertAndEvaluateList(G', t', xs)
 	      else
-		(G', t', w')
+		(false, (G', t'))
 	    end
 
 
@@ -630,7 +727,7 @@ struct
 
 	val _ = Global.chatter := 0
 	val _ = Twelf.reset()
-	val _ = C.reset(metaSig)
+	val _ = C.reset(metaSig) (* world defaultly set to D'.Anything *)
 	val _ = C.setFilename(displayFname)
 	val _ = CSManager.useSolver ("inequality/rationals")
 	val _ = CSManager.useSolver ("equality/strings")
@@ -640,8 +737,7 @@ struct
 	       | _ => (print ("Error Parsing File\n\n") ; []))
 	(* val _ = print ("[done]\n") *)
 
-	val _ = ((convertAndEvaluateList(I.Null, D'.id, D'.Anything, res) ; ())
-		 handle _ => raise Domain (* should not throw any exceptions *))
+	val _ = convertAndEvaluateList(I.Null, D'.id, res)
 
 	val _ = restoreOld()
       in 
@@ -652,28 +748,28 @@ struct
       let
 	val _ = dirPrefix := "" (* in case there is a break in the middle *)
 	val _ = metaSig := nil
-
+	val _ = C.reset(metaSig) (* world defaultly set to D'.Anything *)
 	val _ = print ("\n" ^ version ^ "\n\n")
 	val _ = Global.chatter := 0
 	val _ = Twelf.reset()
 	val _ = CSManager.useSolver ("inequality/rationals")
 	val _ = CSManager.useSolver ("equality/strings")
       in
-	loop (ref (I.Null), ref (D'.id), ref (D'.Anything))
+	loop (ref (I.Null), ref (D'.id))
       end
 
 
-    and top' (GRef, tRef, wRef) =
+    and top' (GRef, tRef) =
       let
 	val _ = Global.chatter := 0
 	val _ = CSManager.useSolver ("inequality/rationals")
 	val _ = CSManager.useSolver ("equality/strings")
       in
-	loop (GRef, tRef, wRef)
+	loop (GRef, tRef)
       end
 
 
-    and loop (GRef, tRef, wRef) = 
+    and loop (GRef, tRef) = 
       let 
 	 fun invokeParser () =
 	   let
@@ -686,37 +782,40 @@ struct
 	     res
 	   end
 
+         val w = C.getWorld()
 	 val _ = C.reset(metaSig)
+	 val _ = C.setWorld(w)
          val _ = print prompt
 
 
          val res = invokeParser ()
 
 
-	 fun convertAndEvaluateList'(G, t, w, []) = (G, t, w)
+	 fun convertAndEvaluateList'(G, t, []) = (G, t)
 
-	   | convertAndEvaluateList'(G, t, w, x::xs) =
+	   | convertAndEvaluateList'(G, t, x::xs) =
 	            let
-		      val (G', t', w') = convertAndEvaluate(G,t,w,x)
+		      val (success, (G', t')) = convertAndEvaluate(G,t,x)
 		      val _ = (GRef := G')
 		      val _ = (tRef := t')
-		      val _ = (wRef := w')
 		    in
-		      convertAndEvaluateList'(G', t', w', xs)
+		      if success then
+			convertAndEvaluateList'(G', t', xs)
+		      else
+			(G', t')
 		    end
-			handle Error s => (print (s ^ "\n\n") ; (!GRef, !tRef, !wRef))
-			     | Names.Error s => (print (s ^ "\n\n") ; (!GRef, !tRef, !wRef))
-			     | ReconTerm.Error s => (print (s ^ "\n\n") ; (!GRef, !tRef, !wRef))
-			     | Subordinate.Error s => (print (s ^ "\n\n") ; (!GRef, !tRef, !wRef))
+			handle Error s => (print (s ^ "\n\n") ; (!GRef, !tRef))
+			     | Names.Error s => (print (s ^ "\n\n") ; (!GRef, !tRef))
+			     | ReconTerm.Error s => (print (s ^ "\n\n") ; (!GRef, !tRef))
+			     | Subordinate.Error s => (print (s ^ "\n\n") ; (!GRef, !tRef))
 
 
 
-	 val (G', t', w') = (convertAndEvaluateList'(!GRef, !tRef, !wRef, res)
-	        handle _ => raise Domain (* should not raise any exceptions *) )
+	 val (G', t') = (convertAndEvaluateList'(!GRef, !tRef, res))
 
 
       in 
-         loop (GRef, tRef, wRef)
+         loop (GRef, tRef)
       end
 
      
@@ -724,10 +823,14 @@ struct
     val version = version
     val debug = debug
     val enableCoverage = enableCoverage
-    val enableWorlds = enableWorlds
+    val enableTermination = enableTermination
+    val stopOnWarning = stopOnWarning
     val parseDebug = parseDebug
     val pageWidth = pageWidth
     val smartInj = smartInj
+    val printPatternVars = printPatternVars
+    val printImplicit = printImplicit
+    val doubleCheck = doubleCheck
     val loadFile = loadFile
     val top = top
     val top' = top'
@@ -740,9 +843,10 @@ struct
 	()
       end
 
-    fun resetMetaSig () =
+    fun resetMetaSigAndWorld () =
       let
 	val _ = metaSig := nil
+	val _ = C.setWorld (D'.Anything)
       in
 	()
       end

@@ -10,11 +10,13 @@ use "int-admit.d" ;
  * extended with a "cut" constructor.
  *) 
 
+params = <hyp A>, <o>, <i> ;
+
 fun ce : ({<cut : {A}{C}conc A -> (hyp A -> conc C) -> conc C #>} <conc A>) -> <conc A>
    = fn {<cut>} <cut A C (D1 cut) (D2 cut)> =>
                                           (case (ce ({<cut>} <D1 cut>))
                                           of <D1'> => case ({<h>} ce ({<cut>} <D2 cut h>))
-                                                       of {<h>} <D2' h> => ca <D1'> <D2'>)
+                                                       of {<h>} <D2' h> => ca <_> <D1'> <D2'>)
       | {<cut>} <axiom H> => <axiom H>
 
       | {<cut>} <andr (D1 cut) (D2 cut)> =>
@@ -31,7 +33,7 @@ fun ce : ({<cut : {A}{C}conc A -> (hyp A -> conc C) -> conc C #>} <conc A>) -> <
 
       | {<cut>} <andl2 (D2 cut) H> =>
                                (case {<h2>} ce ({<cut>}<D2 cut h2>)
-                                  of {<h2>}<D2' h2> => <andl1 D2' H>)
+                                  of {<h2>}<D2' h2> => <andl2 D2' H>)
 
 
       | {<cut>} <impr (D1 cut)> => (case {<h>} ce ({<cut>} <D1 cut h>)

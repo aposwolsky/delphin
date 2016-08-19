@@ -17,6 +17,23 @@ sig <nd : o -> type>
     <impi : (nd A -> nd B) -> nd (A ar B)> 
     <impe : nd (A ar B) -> nd A -> nd B> ;
 
+(* Combinators *)
+sig <comb : o -> type> 
+    <K : comb (A ar B ar A)>
+    <S : comb ((A ar B ar C) ar (A ar B) ar A ar C) > 
+    <MP : comb (A ar B) -> comb A -> comb B> ;
+
+params = .;
+
+(* Interpreter *)
+fun eval : <exp> -> <exp> = 
+   fn <app E1 E2> => (case (eval <E1>, eval <E2>) of
+                      (<lam F>, <V>) => eval <F V>)
+    | <lam E> => <lam E> ;
+
+
+params = <o>, <exp>, <nd A>, <comb A> ;
+
 (* Addition *)
 fun plus : <nat> -> <nat> -> <nat> = 
    fn <z> <M> => <M>
@@ -26,21 +43,15 @@ fun plus : <nat> -> <nat> -> <nat> =
 	 	       <s x>
 		    end;
 
-(* Interpreter *)
-fun eval : <exp> -> <exp> = 
-   fn <app E1 E2> => (case (eval <E1>, eval <E2>) of
-                      (<lam F>, <V>) => eval <F V>)
-    | <lam E> => <lam E> ;
-
-
 (* Beta Reduction *)
 fun evalBeta : <exp> -> <exp> =
    fn <app E1 E2> => (case (evalBeta <E1>, evalBeta <E2>)
                       of (<lam F>, <V>) => evalBeta <F V>
-                       | [<x:exp#>](<x>, <V>) => <app x V>)
+                       | (<x#>, <V>) => <app x V>
+		       | (<E'>, <V>) => <app E' V>)
     | <lam E> => (case ({<x>} evalBeta <E x>)
                     of {<x>}<E' x> => <lam E'>)
-    | [<x:exp#>] <x> => <x> ;
+    | <x#> => <x> ;
 
 
 (* Variable Counting *)
@@ -48,7 +59,7 @@ fun cntvar  : <exp> -> <nat>
  = fn <app E E3>     =>  plus (cntvar <E>) (cntvar <E3>)
     | <lam E>        =>  (case ( {<x>} cntvar <E x>)
                             of  ({<x>} <N>)  => <N>)
-    | [<x:exp#>] <x> => <s z>;
+    | <x#> => <s z>;
 
 (* Lemma 1 is over any type A, tau and sigma,
  * but we just show it for one example.
@@ -82,13 +93,6 @@ val test4' = (lemma1-1 exampleF1) ({<x>} <lam [x] x>) ;
 
 
 
-(* Combinators *)
-sig <comb : o -> type> 
-    <K : comb (A ar B ar A)>
-    <S : comb ((A ar B ar C) ar (A ar B) ar A ar C) > 
-    <MP : comb (A ar B) -> comb A -> comb B> ;
-
-
 fun ba : <comb A -> comb B> -> <comb (A ar B)> 
   = fn <F> => <MP (MP S K) (K : comb (A ar A ar A))>
      | <[x] MP (D1 x) (D2 x)> =>   (case ((ba <D1>), (ba <D2>))
@@ -101,9 +105,9 @@ fun convert : convParamFun  -> <D:nd A> -> <comb A> =
       fn W <impi D'> => 
 	    (case ({<d>}{<u>} 
 		let
-		    fun W' = fn <_> d => <u>
-			      | ([<B'>][<d'>] {<d>}{<u>} (<B'> d' => 
-						         (let val R = W <B'> d' in {<d>}{<u>}R end) \d \u))
+		    fun W' = fn <_> <d> => <u>
+			      | ({<d>}{<u>} (<B'> <d'> => 
+						         (let val R = W <B'> <d'> in {<d>}{<u>}R end) \d \u))
 							  \d \u 
 	        in					 
 	             convert W' <D' d>
@@ -112,17 +116,17 @@ fun convert : convParamFun  -> <D:nd A> -> <comb A> =
        | W <impe D1 D2> => (case ((convert W <D1>), (convert W <D2>))
 	                                      of (<U1>,<U2>) => <MP U1 U2>) 
 	     
-       | W [<x:nd A#>] <x> => W <A> x;
+       | W <x> => W <A> <x>;
 
 (* Convert simplified using Delphin "with" construct *)
 fun convert : convParamFun  -> <D:nd A> -> <comb A> =
       fn W <impi D'> => 
-	    (case ({<d>}{<u>} convert (W with <_> d => <u>) <D' d>)
+	    (case ({<d>}{<u>} convert (W with <_> <d> => <u>) <D' d>)
 	      of ({<d>}{<u>} <D'' u>) => ba <D''>)
        | W <impe D1 D2> => (case ((convert W <D1>), (convert W <D2>))
 	                                      of (<U1>,<U2>) => <MP U1 U2>) 
 	     
-       | W [<x:nd A#>] <x> => W <A> x;
+       | W <x#> => W <A> <x>;
 
 val testConvert = {<A>} convert (fn .)  <impi [x:nd A] x> ;
   (* evaluates to  {<A : o#>} <MP (MP S K) K> *)

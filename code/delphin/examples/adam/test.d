@@ -10,6 +10,13 @@ sig
 <k : comb (A ar B ar A)>
 <s : comb ((A ar B ar C) ar (A ar B) ar A ar C) > 
 <mp : comb (A ar B) -> comb A -> comb B> ;
+sig <exp : type>
+<lam : (exp -> exp) -> exp>
+<app : exp -> exp -> exp>
+<eq : exp -> exp -> type> 
+<eq_app : eq E1 F1 -> eq E2 F2 -> eq (app E1 E2) (app F1 F2)>
+<eq_lam : ({x}eq x x -> eq (E x) (F x)) -> eq (lam E) (lam F)>;
+
 
 
 fun ba : <A:o> -> <B:o> -> <comb A -> comb B> -> <comb (A ar B)> 
@@ -23,8 +30,8 @@ fun ba : <A:o> -> <B:o> -> <comb A -> comb B> -> <comb (A ar B)>
 
 
 fun extendC : (<A:o> -> <D: nd A#> -> <comb A>) -> <B:o> -> {<x:nd B#>}{<y:comb B#>}(<A:o> -> <D: nd A#> -> <comb A>) = 
-  fn W => fn <B> => fn {<x>} {<y>} (<B> => fn x => <y>) 
-	            | [<e>] {<x>} {<u>} (<A'> => fn e => let
+  fn W => fn <B> => fn {<x>} {<y>} (<B> x => <y>) 
+	            | [<e>] {<x>} {<u>} (<A'>  e => let
 							   val result = W <A'> e
 							 in
 							   {<x>}{<u>} result
@@ -34,12 +41,12 @@ fun extendC : (<A:o> -> <D: nd A#> -> <comb A>) -> <B:o> -> {<x:nd B#>}{<y:comb 
 
 fun convert : _ -> <A:o> -> <D:nd A> -> <comb A> =
       fn W =>
-              fn <_> and <impi D'> => (case ({<d>}{<u>} convert ((extendC W <_>) \d \u) <_> <D' d>)
+              fn <_> <impi D'> => (case ({<d>}{<u>} convert ((extendC W <_>) \d \u) <_> <D' d>)
 	                                       of ({<d>}{<u>} <D'' u>) => ba <_> <_> <D''>) 
-               | <_> and <impe D1 D2> => (case ((convert W <_> <D1>), (convert W <_> <D2>))
+               | <_> <impe D1 D2> => (case ((convert W <_> <D1>), (convert W <_> <D2>))
 	                                      of (<U1>,<U2>) => <mp U1 U2>) 
 	     
-	       | [<x:nd A#>] <A> and <x> => W <A> x;
+	       | [<x:nd A#>] <A> <x> => W <A> x;
 
 
 
@@ -54,16 +61,6 @@ val test = {<A>}{<B>} convert (fn .) <_> < impi [x:nd (A ar B)] impi [y: nd A] i
 
 
 
-sig 
-<nat : type>
-<z : nat>
-<s : nat -> nat>
-<exp : type>
-<lam : (exp -> exp) -> exp>
-<app : exp -> exp -> exp>
-<eq : exp -> exp -> type> 
-<eq_app : eq E1 F1 -> eq E2 F2 -> eq (app E1 E2) (app F1 F2)>
-<eq_lam : ({x}eq x x -> eq (E x) (F x)) -> eq (lam E) (lam F)>;
 
 
 fun extend : (<f:exp#> -> <eq f f>) -> {<x:exp#>}{<u:eq x x#>} (<f:exp#> -> <eq f f>) =
@@ -95,11 +92,10 @@ val y = {<x>}{<u>} eqfun ((extend (fn .)) \x \u) <x> ;
 val test = eqfun (fn .) <lam [x] app x x>;
 
 
-fun plus 
- = fn <z> => (fn [<n>] <n> => <n>)
-    | [<n1:nat>]<s n1> => fn [<n2:nat>] <n2> => 
-	        case (plus <n1> <n2>)
-	        of [<n3>](<n3>) => <s n3>;
+sig 
+<nat : type>
+<z : nat>
+<s : nat -> nat> ;
 
 sig <adam : nat -> type> ;
 sig <adamz : adam z> ;
@@ -107,6 +103,14 @@ sig <adamind : {x:nat} adam x -> adam (s x)> ;
 sig <adamind2 : adam X -> adam (s X)> ;
 sig <adambar : adam X -> nat> ;
 sig <foo : {x:nat} adam x> ;
+
+
+fun plus 
+ = fn <z> => (fn [<n>] <n> => <n>)
+    | [<n1:nat>]<s n1> => fn [<n2:nat>] <n2> => 
+	        case (plus <n1> <n2>)
+	        of [<n3>](<n3>) => <s n3>;
+
 
 fun foo : <E : {n}adam n> ->  unit = 
   fn [<G>]<G> => () ;
@@ -226,8 +230,8 @@ fun plus : <nat> -> <nat> -> <nat>
 	        of (<N3>) => <s N3>;
 
 fun plus : <nat> -> <nat> -> <nat>
- = fn <z> and N => N
-    | <s N1> and M => 
+ = fn <z>  N => N
+    | <s N1>  M => 
 	        case (plus <N1> M)
 	        of (<N3>) => <s N3>;
 

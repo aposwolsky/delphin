@@ -5,6 +5,8 @@ sig	<bool : type>
 	<true : bool>
 	<false : bool>;
 
+params = .;
+
 fun not : <bool> -> <bool> =
  fn <true> => <false>
  | <false> => <true> ;
@@ -16,7 +18,7 @@ fun or : <bool> -> <bool> -> <bool> =
  fn <true> <true> => <true>
  | <true> <false> => <true>
  | <false> <true> => <true>
- | <false> false> => <false> ;
+ | <false> <false> => <false> ;
 
 val o1 = or <true> <true> ;
 val o2 = or <false> <true> ;

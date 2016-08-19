@@ -3,12 +3,15 @@
  * Abstraction of the actual internal syntax is only used in coverage.
  * Therefore, the properties are as follows:
  *  (1) We only abstract "Patterns" (* now convert.fun requries us to abstract a little more... *)
- *  (2) We abstract meta-level EVars and BoundVars
- *  (3) We abstract LF-level EVars and BoundVars (not FVars, LVars, or AVsrs)
+ *  (2) There can be NO PopC's in the subject of abstraction.
+ *  (3) We abstract meta-level EVars and BoundVars
+ *  (4) We abstract LF-level EVars and BoundVars (not FVars, LVars, or AVsrs)
  *             (* The "BoundVars" take the place of Blocks (LVars).
                 * FVars are removed before getting to this stage.
                 * I have no idea what your AVars are.
                 *)
+    (5) Abstraction raises everything to make sense in Gglobal
+       which is the context the EVars were created relative to.
  *
  * Author: Adam Poswolsky
  * **************************************************************************
@@ -33,6 +36,15 @@ struct
        where cnstrs collects all constraints attached to EVars in K
     *)
     fun collectConstraints (I.Null) = nil
+      | collectConstraints (I.Decl (G, BV (D.BVarLF ((r, A, list, ref nil), s)))) = collectConstraints G
+      | collectConstraints (I.Decl (G, BV (D.BVarLF ((r, A, list, ref cnstrL), s)))) = 
+               let
+		 val constraints = C.simplify cnstrL
+	       in
+		 case constraints of
+		   nil => collectConstraints G
+		   | _ => (constraints) :: (collectConstraints G)
+	       end
       | collectConstraints (I.Decl (G, BV _)) = collectConstraints G
       | collectConstraints (I.Decl (G, Meta_EV _)) = collectConstraints G
       | collectConstraints (I.Decl (G, LF_EV (I.EVar (_, _, _, ref nil)))) = collectConstraints G
@@ -81,11 +93,11 @@ struct
     fun eqLF_EVar (I.EVar (r1, _, _, _)) (LF_EV (I.EVar (r2, _, _, _))) = (r1 = r2)
       | eqLF_EVar _ _ = false
 
-    fun eqLF_BVar1 (I.BVarVar ((r1, _, _), _)) (BV (D.BVarLF ((r2, _, _), _))) = (r1 = r2)
+    fun eqLF_BVar1 (I.BVarVar ((r1, _, _, _), _)) (BV (D.BVarLF ((r2, _, _, _), _))) = (r1 = r2)
       | eqLF_BVar1 _ _ = false
 
 
-    fun eqLF_BVar2 (D.BVarLF ((r1, _, _), _)) (BV (D.BVarLF ((r2, _, _), _))) = (r1 = r2)
+    fun eqLF_BVar2 (D.BVarLF ((r1, _, _, _), _)) (BV (D.BVarLF ((r2, _, _, _), _))) = (r1 = r2)
       | eqLF_BVar2 _ _ = false
 
 
@@ -93,8 +105,10 @@ struct
       | eqMeta_EVar _ _ = false
 
 
+   (* removed BVarMeta
     fun eqMeta_BVar (D.BVarMeta ((r1, _), _)) (BV (D.BVarMeta ((r2, _), _)))  = (r1 = r2)
       | eqMeta_BVar _ _ = false
+   *)
 
 
     (* exists P K = B
@@ -180,8 +194,9 @@ struct
     (* raiseType (G, V) = {{G}} V
 
        Invariant:
-       If G |- V : L
-       then  . |- {{G}} V : L
+       If Gglobal,G |- V : L
+       then  Gglobal |- {{G}} V : L
+       * Note that all EVars are created relative to Gglobal
 
        All abstractions are potentially dependent.
     *)
@@ -210,11 +225,11 @@ struct
       | collectExpW ((I.Root (I.Proj (L as I.LVar (r, _, (l, t)), i), S), s), K) =
 	    crash() (* No more blocks!!! *)
 
-      | collectExpW ((I.Root (I.BVar (B as I.BVarVar ((r,A,list), s0)) , S), s (* id *)), K) =
+      | collectExpW ((I.Root (I.BVar (B as I.BVarVar ((r,A,list,cnstrs), s0)) , S), s (* id *)), K) =
 	      if (exists (eqLF_BVar1 B) K) then
 		collectSpine ((S, s), collectSub(s0, K))
 	      else
-		collectSpine ((S, s), I.Decl (collectSub(s0, collectExp((A, I.id), K)), BV (D.BVarLF ((r,A,list), s0))))
+		collectSpine ((S, s), I.Decl (collectSub(s0, collectExp((A, I.id), K)), BV (D.BVarLF ((r,A,list,cnstrs), s0))))
 
       | collectExpW ((I.Root (_ , S), s), K) =
 	  collectSpine ((S, s), K)
@@ -292,7 +307,7 @@ struct
 
     fun getNumShifts (D.Shift t) = (getNumShifts t) + 1
       | getNumShifts (D.id) = 0
-      | getNumShifts (D.Dot (D.Prg (D.Var(D.Fixed n, NONE)), t)) = if (getNumShifts t) = n then n else crash() (* not a shift sub *)
+      | getNumShifts (D.Dot (D.Prg (D.Var(D.Fixed n, _)), t)) = if (getNumShifts t) = n then n else crash() (* not a shift sub *)
       | getNumShifts _ = crash() (* not a shift substitution *)
 
     fun getNumLFShifts (I.Shift i) = i
@@ -333,14 +348,14 @@ struct
       | abstractLF_EVar (I.Null, _, _) = NONE
 
 
-    fun abstractLF_BVar (I.Decl (K', BV (D.BVarLF((r, _,_), s1))), depth, X as I.BVarVar ((r', _,_), s2)) =
+    fun abstractLF_BVar (I.Decl (K', BV (D.BVarLF((r, _,_,_), s1))), depth, X as I.BVarVar ((r', _,_,_), s2)) =
         if r = r' then (checkLFSub(s2, s1) ; SOME(depth + 1))
 	else abstractLF_BVar (K', depth+1, X)
       | abstractLF_BVar (I.Decl (K', _), depth, X) = 
 	  abstractLF_BVar (K', depth+1, X)
       | abstractLF_BVar (I.Null, _, _) = NONE
 
-    fun abstractLF_BVar2 (I.Decl (K', BV (D.BVarLF((r, _,_), s1))), depth, X as D.BVarLF ((r', _,_), s2)) =
+    fun abstractLF_BVar2 (I.Decl (K', BV (D.BVarLF((r, _,_,_), s1))), depth, X as D.BVarLF ((r', _,_,_), s2)) =
         if r = r' then (checkLFSub(s2, s1) ; SOME(depth + 1))
 	else abstractLF_BVar2 (K', depth+1, X)
       | abstractLF_BVar2 (I.Decl (K', _), depth, X) = 
@@ -355,12 +370,14 @@ struct
       | abstractMeta_EVar (I.Null, _, _) = NONE
 
 
+    (* removed BVarMeta
     fun abstractMeta_BVar (I.Decl(K', BV (D.BVarMeta ((r,_),s1))), depth, P as D.BVarMeta ((r', _), s2))  =
           if r = r' then (checkSub(s2, s1) ; SOME(depth + 1))
 	  else abstractMeta_BVar (K', depth+1, P)
       | abstractMeta_BVar (I.Decl(K', _), depth, P) =
 	    abstractMeta_BVar (K', depth+1, P)
       | abstractMeta_BVar (I.Null, _, P) = NONE
+    *)
 
 
     (* abstractExpW (K, depth, (U, s)) = U'
@@ -464,83 +481,40 @@ struct
 
 
 
-
-
-
-    (* abstractKCtx (K, |K|-1) = G 
-     * WARNING:: May not be used anymore
-     *)
-    fun abstractKCtx (I.Null, ~1) = I.Null
-      | abstractKCtx (I.Null, numShifts) = crash() (* numShifts should be ~1 *)
-      | abstractKCtx (I.Decl (K', LF_EV (I.EVar (_, GX, VX, _))), numShifts) =
-        let
-          val V' = raiseType (GX, VX) 
-	  val V'' = abstractExp (K', 0, (V', I.Shift numShifts))
-          (* enforced by reconstruction -kw
-	  val _ = checkType V''	*)
-	in	 
-	  I.Decl(abstractKCtx (K', numShifts-1), D.InstantiableDec (D.NormalDec(NONE, D.LF(D.Existential, V''))))
-	end
-      | abstractKCtx (I.Decl (K', Meta_EV (D.EVar ((r,F), _))), numShifts) =
-        let
-          val F' = abstractDelFormula(K', 0, D.FClo(F, I.Shift numShifts))
-	in	 
-	  I.Decl(abstractKCtx (K', numShifts-1), D.InstantiableDec (D.NormalDec(NONE, D.Meta(D.Existential, F'))))
-	end
-
-      | abstractKCtx (I.Decl (K', BV (D.BVarLF ((r, A,list), _))), numShifts) = 
-        let
-	  val A' = abstractExp (K', 0, (A, I.Shift numShifts))
-	in	 
-	  I.Decl(abstractKCtx (K', numShifts-1), D.InstantiableDec (D.NormalDec(NONE, D.LF(D.Param, A'))))
-	end
-
-
-      | abstractKCtx (I.Decl (K', BV (D.BVarMeta ((r,F), _))), numShifts) = 
-        let
-          val F' = abstractDelFormula(K', 0, D.FClo(F, I.Shift numShifts))
-	in	 
-	  I.Decl(abstractKCtx (K', numShifts-1), D.InstantiableDec (D.NormalDec(NONE, D.Meta(D.Param, F'))))
-	end
-
-
-      | abstractKCtx _ = crash()
-
-
-
-
     and abstractKEps (I.Null, C, ~1) = C
       | abstractKEps (I.Null, C, numShifts) = crash() (* numShifts should be ~1 *)
       | abstractKEps (I.Decl (K', LF_EV (I.EVar (_, GX, VX, _))), C, numShifts) =
         let
-          val V' = raiseType (GX, VX) 
+          val V' = raiseType (GX, VX)  (* Makes sense in Gglobal *)
 	  val V'' = abstractExp (K', 0, (V', I.Shift numShifts))
           (* enforced by reconstruction -kw
 	  val _ = checkType V''	*)
 	in	 
-	  abstractKEps(K', D.Eps(D.NormalDec(NONE, D.LF(D.Existential, V'')), C), numShifts -1)
+	  abstractKEps(K', D.Eps(D.NormalDec(NONE, D.LF(D.Existential, V'')), C, NONE), numShifts -1)
 	end
       | abstractKEps (I.Decl (K', Meta_EV (D.EVar ((r,F), _))), C, numShifts) =
         let
           val F' = abstractDelFormula(K', 0, D.FClo(F, I.Shift numShifts))
 	in
-	  abstractKEps(K', D.Eps(D.NormalDec(NONE, D.Meta(D.Existential, F')), C), numShifts -1)
+	  abstractKEps(K', D.Eps(D.NormalDec(NONE, D.Meta(F')), C, NONE), numShifts -1)
 	end
 
-      | abstractKEps (I.Decl (K', BV (D.BVarLF ((r, A,list), _))), C,  numShifts) = 
+      | abstractKEps (I.Decl (K', BV (D.BVarLF ((r, A,list,cnstrs), _))), C,  numShifts) = 
         let
 	  val A' = abstractExp (K', 0, (A, I.Shift numShifts))
 	in
-	  abstractKEps(K', D.Eps(D.NormalDec(NONE, D.LF(D.Param, A')), C), numShifts -1)
+	  abstractKEps(K', D.Eps(D.NormalDec(NONE, D.LF(D.Param, A')), C, NONE), numShifts -1)
 	end
 
 
+      (* removed BVarMeta
       | abstractKEps (I.Decl (K', BV (D.BVarMeta ((r,F), _))), C, numShifts) = 
         let
           val F' = abstractDelFormula(K', 0, D.FClo(F, I.Shift numShifts))
 	in
-	  abstractKEps(K', D.Eps(D.NormalDec(NONE, D.Meta(D.Param, F')), C), numShifts -1)
+	  abstractKEps(K', D.Eps(D.NormalDec(NONE, D.Meta(D.Param, F')), C, NONE), numShifts -1)
 	end
+      *)
 
 
       | abstractKEps _ = crash()
@@ -555,13 +529,15 @@ struct
 
 
     and collectDelBoundVarW (E as D.Fixed _, K) = K
+      (* removed BVarMeta
       | collectDelBoundVarW (B as D.BVarMeta ((r, F), s), K) = 
           if (exists (eqMeta_BVar B) K) then
 	    collectDelSub(s, K)
 	  else
 	    I.Decl (collectDelSub(s, collectDelFormula(F, K)), BV B)
+      *)
 
-      | collectDelBoundVarW (B as D.BVarLF ((r, A, list), s), K) = 
+      | collectDelBoundVarW (B as D.BVarLF ((r, A, list,cnstrs), s), K) = 
           if (exists (eqLF_BVar2 B) K) then
 	    collectSub(s, K)
 	  else
@@ -588,11 +564,18 @@ struct
 
 
       | collectDelExpW (D.New (D, E, fileInfo), K) = collectDelExp(E, collectDelNewDec (D, K))
-      | collectDelExpW (D.App (visible, E1, E2), K) = collectDelExp(E2, collectDelExp(E1, K))
+      | collectDelExpW (D.App (E1, args), K) = 
+			let
+			  fun collectExps ([], K) = K
+			    | collectExps ((_, _, E2)::Es, K) = collectExps(Es, collectDelExp(E2, K))
+			in
+			  collectExps(args, collectDelExp(E1, K))
+			end
+
       | collectDelExpW (D.Pair (E1, E2, F), K) = collectDelExp(E2, collectDelExp(E1, collectDelFormula(F, K)))
       | collectDelExpW (D.ExpList _, K) = crash() (* not a valid pattern *)
       | collectDelExpW (D.Proj _, K) = crash() (* not a valid pattern *)
-      | collectDelExpW (D.Pop (i, E), K) = collectDelExp(E, K)
+      | collectDelExpW (D.Pop (i, E, fileInfo), K) = collectDelExp(E, K)
       | collectDelExpW (D.Fix _, K) = crash() (* not a valid pattern *)
       | collectDelExpW (E as D.EVar ((r,F), s), K) =
 	if exists (eqMeta_EVar E) K then
@@ -607,23 +590,25 @@ struct
       | collectDelExpW (D.EClo _, K) = crash() (* not in whnf *)
 
 
-    and collectDelCaseBranch(D.Eps(D, C), K) = collectDelCaseBranch(C, collectDelNormalDec(D, K))
+    and collectDelCaseBranch(D.Eps(D, C, fileInfo), K) = collectDelCaseBranch(C, collectDelNormalDec(D, K))
       | collectDelCaseBranch(D.NewC(D, C, fileInfo), K) = collectDelCaseBranch(C, collectDelNewDec(D, K))
-      | collectDelCaseBranch(D.PopC(i, C), K) = crash() (* not a generated pattern *)
-      | collectDelCaseBranch(D.Match(visibility, E1, E2), K) = collectDelExp(E2, collectDelExp(E1, K))
-      | collectDelCaseBranch(D.MatchAnd(visibility, E, C), K) = collectDelCaseBranch(C, collectDelExp(E, K))
+      | collectDelCaseBranch(D.PopC(i, C), K) = crash() (* will never occur *)
+      | collectDelCaseBranch(D.Match([], E2), K) = collectDelExp(E2, K)
+      | collectDelCaseBranch(D.Match(((visibility, E1)::pats), E2), K) = collectDelCaseBranch(D.Match(pats, E2), collectDelExp(E1, K))
+
 
       
     and collectDelNormalDec (D.NormalDec(name, T), K) = collectDelTypes(T, K)
     and collectDelNewDec (D.NewDecLF (name, A), K) = collectExp ((A, I.id), K)
-      | collectDelNewDec (D.NewDecMeta (name, F), K) = collectDelFormula (F, K)
+      | collectDelNewDec (D.NewDecWorld (name, W), K) = K
 
     and collectDelTypes (D.LF (isP, A), K) =  collectExp((A, I.id), K)
-      | collectDelTypes (D.Meta (isP, F), K) = collectDelFormula(F, K)
+      | collectDelTypes (D.Meta (F), K) = collectDelFormula(F, K)
 
     and collectDelFormula (F, K) = collectDelFormulaW(D.whnfF F, K)
     and collectDelFormulaW (F as D.Top, K) = K
-      | collectDelFormulaW (D.All(visible, W, D, F), K) = collectDelFormula(F, collectDelNormalDec(D, K))
+      | collectDelFormulaW (D.All([], F), K) = collectDelFormula(F, K)
+      | collectDelFormulaW (D.All((vis, D)::Ds, F), K) = collectDelFormula(D.All(Ds, F), collectDelNormalDec(D, K))
       | collectDelFormulaW (D.Exists(D, F), K) = collectDelFormula(F, collectDelNormalDec(D, K))
       | collectDelFormulaW (D.Nabla(D, F), K) = collectDelFormula(F, collectDelNewDec(D, K))
       | collectDelFormulaW (D.FormList [], K) = K
@@ -641,6 +626,7 @@ struct
 
 
     and abstractDelBoundVarW (K, depth, E as D.Fixed _) = E
+      (* removed BVarMeta
       | abstractDelBoundVarW (K, depth, B as D.BVarMeta ((r,F), s)) = 
 	  let 
 	    val Hopt = abstractMeta_BVar (K, depth, B)
@@ -649,6 +635,7 @@ struct
 	      of NONE => crash() (* why is there a BVar leftover.. *)
 	       | SOME n => D.Fixed n
 	  end
+      *)
 
       | abstractDelBoundVarW (K, depth, B as D.BVarLF (r, s)) = 
 	  let 
@@ -677,9 +664,9 @@ struct
       | abstractDelExpW (K, depth, D.New (D, E, fileInfo)) = D.New (abstractDelNewDec (K, depth, D),
 							     abstractDelExp(K, depth+1, E), fileInfo)
 
-      | abstractDelExpW (K, depth, D.App (visible, E1, E2)) = D.App (visible,
-								      abstractDelExp(K, depth, E1),
-								      abstractDelExp(K, depth, E2))
+      | abstractDelExpW (K, depth, D.App (E1, args)) = 
+	      D.App (abstractDelExp(K, depth, E1),
+		     map (fn (visible, fileInfo, E2) => (visible, fileInfo, abstractDelExp(K, depth, E2))) args)
 
       | abstractDelExpW (K, depth, D.Pair (E1, E2, F)) = D.Pair (abstractDelExp(K, depth, E1),
 								 abstractDelExp(K, depth, E2),
@@ -689,11 +676,11 @@ struct
 
       | abstractDelExpW (K, depth, D.Proj _) = crash() (* not a valid pattern *)
 	      
-      | abstractDelExpW (K, depth, D.Pop (i, E)) = 
+      | abstractDelExpW (K, depth, D.Pop (i, E, fileInfo)) = 
 	      if (i > depth) then 
-		crash() (* cannot abstract as point of reference is changed too far.  Should never happen by invariant *)
+		D.Pop(i, E, fileInfo) (* nothing to abstract *)
 	      else
-		D.Pop(i, abstractDelExp(K, depth-i, E))
+		D.Pop(i, abstractDelExp(K, depth-i, E), fileInfo)
 
       | abstractDelExpW (K, depth, D.Fix _) = crash() (* not a valid pattern *)
 
@@ -703,42 +690,48 @@ struct
 		in
 	    case Hopt
 	      of NONE => crash() (* why is there a BVar leftover.. *)
-	       | SOME n => 
-		   let
-
-		   in
-		     D.Var(D.Fixed n, NONE)
-		   end
+	       | SOME n =>  D.Var(D.Fixed n, NONE) 
 		end
 	      
       | abstractDelExpW (K, depth, D.EClo _) = crash() (* not in whnf *)
 
 
-    and abstractDelCaseBranch(K, depth, D.Eps(D, C)) = D.Eps(abstractDelNormalDec(K, depth, D),
-							     abstractDelCaseBranch(K, depth+1, C))
+    and abstractDelCaseBranch(K, depth, D.Eps(D, C, fileInfo)) = D.Eps(abstractDelNormalDec(K, depth, D),
+								       abstractDelCaseBranch(K, depth+1, C), 
+								       fileInfo)
       | abstractDelCaseBranch(K, depth, D.NewC(D, C, fileInfo)) = D.NewC(abstractDelNewDec(K, depth, D),
 									 abstractDelCaseBranch(K, depth+1, C),
 									 fileInfo)
-      | abstractDelCaseBranch(K, depth, D.PopC(i, C)) = crash() (* not a generated pattern *)
-      | abstractDelCaseBranch(K, depth, D.Match(visibility, E1, E2)) = D.Match(visibility, 
-									       abstractDelExp(K, depth, E1),
-									       abstractDelExp(K, depth, E2))
-      | abstractDelCaseBranch(K, depth, D.MatchAnd(visibility, E, C)) = D.MatchAnd(visibility,
-										   abstractDelExp(K, depth, E),
-										   abstractDelCaseBranch(K, depth, C))
+      | abstractDelCaseBranch(K, depth, D.PopC(i, C)) = crash() (* will never occur *)
+
+      | abstractDelCaseBranch(K, depth, D.Match(pats, E2)) = D.Match(map (fn (vis, E1) => (vis, abstractDelExp(K, depth, E1))) pats,
+								     abstractDelExp(K, depth, E2))
 
       
     and abstractDelNormalDec (K, depth, D.NormalDec(name, T)) = D.NormalDec(name, abstractDelTypes(K, depth, T))
     and abstractDelNewDec (K, depth, D.NewDecLF (name, A)) = D.NewDecLF (name, abstractExp(K, depth, (A, I.id)))
-      | abstractDelNewDec (K, depth, D.NewDecMeta (name, F)) = D.NewDecMeta(name, abstractDelFormula(K, depth, F))
+      | abstractDelNewDec (K, depth, D.NewDecWorld (name, W)) = D.NewDecWorld(name, W)
 
     and abstractDelTypes (K, depth, D.LF (isP, A)) = D.LF(isP, abstractExp(K, depth, (A, I.id)))
-      | abstractDelTypes (K, depth, D.Meta (isP, F)) = D.Meta(isP, abstractDelFormula(K, depth, F))
+      | abstractDelTypes (K, depth, D.Meta (F)) = D.Meta(abstractDelFormula(K, depth, F))
 
     and abstractDelFormula (K, depth, F) = abstractDelFormulaW(K, depth, D.whnfF F)
     and abstractDelFormulaW (K, depth, F as D.Top) = F
-      | abstractDelFormulaW (K, depth, D.All(visible, W, D, F)) = D.All (visible, W, abstractDelNormalDec(K, depth, D),
-							     abstractDelFormula(K, depth+1, F))
+      | abstractDelFormulaW (K, depth, D.All(Ds, F)) = 
+            let
+	      fun abstract ([], d) = ([], d)
+		| abstract ((vis, D)::Ds, d) = 
+		     let
+		       val D' = abstractDelNormalDec (K, d, D)
+		       val (Ds', d') = abstract (Ds, d+1)
+		     in
+		       ((vis, D') :: Ds', d')
+		     end
+	      val (Ds', depth') = abstract (Ds, depth)
+	    in
+	      D.All (Ds', abstractDelFormula(K, depth', F))
+	    end
+
       | abstractDelFormulaW (K, depth, D.Exists(D, F)) = D.Exists (abstractDelNormalDec(K, depth, D),
 								   abstractDelFormula(K, depth+1, F))
       | abstractDelFormulaW (K, depth, D.Nabla(D, F)) = D.Nabla (abstractDelNewDec(K, depth, D),
@@ -749,24 +742,9 @@ struct
       | abstractDelFormulaW (K, depth, D.FClo _) = crash() (* not in whnf *)
 
 
-    (* Takes one branch and abstracts all variables in it *)
-    (* ADAM::  May not be used! *)
-    fun getContext (C) =
-              let
-		val K = collectDelCaseBranch(C, I.Null)
-
-		val _ = checkConstraints K
-		val n = I.ctxLength K
-		val C' = D.substCase (C, D.shiftTo(n, D.id))
-		val Cnew = abstractDelCaseBranch(K, 0, C)
-		val G = abstractKCtx(K, n-1)
-	      in
-		(G, Cnew)
-	      end
-
-
     fun abstractCase (C) =
               let
+		(* Precondition:  C makes sense in Gglobal *)
 		val K = collectDelCaseBranch(C, I.Null)
 
 		val _ = checkConstraints K
@@ -814,6 +792,51 @@ struct
 	       in
 		 b
 	       end
+
+
+    (* The next two functions are used in Termination where we want to compare two terms *)
+    
+
+    fun abstractKCtx (I.Null, ~1) = I.Null
+      | abstractKCtx (I.Null, numShifts) = crash() (* numShifts should be ~1 *)
+      | abstractKCtx (I.Decl (K', LF_EV (I.EVar (_, GX, VX, _))), numShifts) =
+        let
+          val V' = raiseType (GX, VX)  (* Makes sense in Gglobal *)
+	  val V'' = abstractExp (K', 0, (V', I.Shift numShifts))
+	in	 
+	  I.Decl(abstractKCtx(K', numShifts -1), D.InstantiableDec (D.NormalDec(NONE, D.LF(D.Existential, V''))))
+	end
+      | abstractKCtx (I.Decl (K', Meta_EV (D.EVar ((r,F), _))), numShifts) = 
+        let
+          val F' = abstractDelFormula(K', 0, D.FClo(F, I.Shift numShifts))
+	in
+	  I.Decl(abstractKCtx(K', numShifts -1), D.InstantiableDec (D.NormalDec(NONE, D.Meta(F'))))
+	end
+
+      | abstractKCtx (I.Decl (K', BV (D.BVarLF ((r, A,list,cnstrs), _))),  numShifts) = 
+        let
+	  val A' = abstractExp (K', 0, (A, I.Shift numShifts))
+	in
+	  I.Decl(abstractKCtx(K', numShifts -1), D.InstantiableDec (D.NormalDec(NONE, D.LF(D.Param, A'))))
+	end
+      | abstractKCtx _ = crash()
+
+
+    (* abstractComparison (M1, M2) = (M1', M2', G) where G contains all the variables using in M1' and M2' *)
+    (* Precondition is that M1 and M2 both make sense with respect to the same Gglobal context *)
+    fun abstractComparison (M1, M2) =
+              let
+		(* Precondition:  M1 and M2 makes sense in Gglobal *)
+		val K = collectExp((M2, I.id), collectExp((M1, I.id), I.Null))
+		val _ = checkConstraints K
+		val n = I.ctxLength K
+		val M1' = abstractExp(K, 0, (M1, I.Shift n))
+		val M2' = abstractExp(K, 0, (M2, I.Shift n))
+		val G = abstractKCtx (K, n-1)
+	      in
+		(M1', M2', G)
+	      end
+
 
 
 end

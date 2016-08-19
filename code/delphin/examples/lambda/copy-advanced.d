@@ -4,6 +4,16 @@
 sig 	<exp  : type>;
 sig     <eq : exp -> exp -> type> ;
 
+sig     <dummy : (exp -> exp) -> (eq U V -> eq U V) -> type> ;
+	(* this is necessary just to state that 
+	 * we want the subordination relation to allow exp
+	 * to occur in exp and eq to occur in eq.
+	 * We do not actually use "dummy" anywhere.
+	 * And perhaps other syntax can be developed.
+	 *)
+
+params = <exp>;
+
 
 fun extend : {<app  : exp -> exp -> exp>}
 	    {<lam  : (exp -> exp) -> exp>}

@@ -48,6 +48,10 @@ sig
                   * IntSyn.Exp option ref
                   -> IntSyn.Exp
 
+  val pruneBVar : IntSyn.Dec IntSyn.Ctx * IntSyn.Dec IntSyn.Ctx * IntSyn.BoundVar * IntSyn.Sub
+                  * IntSyn.Exp option ref
+                  -> IntSyn.BoundVar
+
   val invertible : IntSyn.dctx * IntSyn.eclo * IntSyn.Sub * IntSyn.Exp option ref -> bool
 
 

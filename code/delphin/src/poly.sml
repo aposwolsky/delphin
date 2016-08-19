@@ -4,7 +4,7 @@
 
 val print = TextIO.print;
 
-PolyML.Compiler.debug := true;
+PolyML.Compiler.debug := false;
 use "twelf/src/compat/array.sig";
 use "twelf/src/compat/vector.sig";
 use "twelf/src/compat/path.sig";
@@ -22,12 +22,14 @@ use "twelf/src/global/global.sig";
 use "twelf/src/global/global.sml";
 use "twelf/src/lambda/fgnopn.sig";
 use "twelf/src/lambda/fgnopntable.fun";
+PolyML.Compiler.debug := true;
 use "twelf/src/lambda/intsyn.sig";
 use "twelf/src/lambda/intsyn.fun";
 use "twelf/src/lambda/whnf.sig";
 use "twelf/src/lambda/whnf.fun";
 use "twelf/src/lambda/conv.sig";
 use "twelf/src/lambda/conv.fun";
+PolyML.Compiler.debug := false;
 use "twelf/src/table/table.sig";
 use "twelf/src/table/hash-table.sml";
 use "twelf/src/table/string-hash.sig";
@@ -55,6 +57,7 @@ use "twelf/src/index/index.sig";
 use "twelf/src/index/index.fun";
 use "twelf/src/index/index-skolem.fun";
 use "twelf/src/index/index.sml";
+PolyML.Compiler.debug := true;
 use "twelf/src/trail/trail.sig";
 use "twelf/src/trail/notrail.sml";
 use "twelf/src/trail/trail.sml";
@@ -72,6 +75,7 @@ use "twelf/src/lambda/abstract.fun";
 use "twelf/src/lambda/approx.sig";
 use "twelf/src/lambda/approx.fun";
 use "twelf/src/lambda/lambda.sml";
+PolyML.Compiler.debug := false;
 use "twelf/src/style/style.sig";
 use "twelf/src/style/style.fun";
 use "twelf/src/style/style.sml";
@@ -335,30 +339,34 @@ fun stackTrace f = PolyML.exception_trace(fn () => f);
 open PolyML.Debug;
 (* Manual at: http://www.polyml.org/docs/Debugging.html *)
 
-
+PolyML.Compiler.debug := true;
 use "elaboration/extSyntax.sml";
 use "elaboration/intSyntax.sml";
+use "elaboration/abstract2.fun";
+use "elaboration/world.fun";
 use "elaboration/approx.sml";
 use "elaboration/tempSyntax.sml";
 use "elaboration/abstract.sig";
 use "elaboration/abstract.fun";
 use "elaboration/abstract.sml";
-use "elaboration/abstract2.fun";
-use "elaboration/world.fun";
 use "elaboration/unifyDelphin.fun";
 use "elaboration/unifyDelphin.sml";
+use "typecheck/typecheck.sig";
+use "typecheck/typecheck.fun";
+use "elaboration/worldChecker.fun";
 use "elaboration/normalizeDelphin.sml";
 use "elaboration/printDelphinExt.sml";
 use "elaboration/printDelphinInt.sml";
+use "elaboration/strict.sml";
 use "elaboration/coverage.fun";
 
-use "typecheck/typecheck.sig";
-use "typecheck/typecheck.fun";
 use "elaboration/convert.sig";
 use "elaboration/convert.fun";
 
 use "opsem/opsem.sig";
 use "opsem/opsem.fun";
+
+use "elaboration/terminate.sml";
 
 
 (* delphin Frontend *)
@@ -374,12 +382,14 @@ use "frontend/ml-yacc-lib-mod/parser2.sml";
 use "frontend/LFparsing.sml";
 use "frontend/interface.sig";
 use "frontend/interface.fun";
+PolyML.Compiler.debug := false;
 use "frontend/delphin.grm.sig";
 use "frontend/polyUnsafe.sml"; (* Dummy "Unsafe" structure for lexer *)
 use "frontend/delphin.lex.sml"; 
 use "frontend/delphin.grm.sml";
 use "frontend/parse-prg.sig";
 use "frontend/parse-prg.fun";
+PolyML.Compiler.debug := true;
 use "frontend/delphin.sig";
 use "frontend/delphin.fun";
 use "frontend/delphin.sml";

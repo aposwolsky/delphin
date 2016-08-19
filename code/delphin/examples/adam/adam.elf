@@ -1,0 +1,45 @@
+% Testing for a bug in Twelf
+
+exp : type.
+lam : (exp -> exp) -> exp.
+app : exp -> exp -> exp.
+
+nat : type.
+z : nat.
+s : nat -> nat.
+
+variable : nat -> type.
+var_z : variable (s N).
+var_s : variable N -> variable (s N).
+
+term : nat -> type.
+bvar' : variable N -> term N.
+lam' : term (s N) -> term N.
+app' : term N -> term N -> term N.
+
+trans : exp -> term N -> type.
+trans_app : trans E1 T1 -> trans E2 T2 -> trans (app E1 E2) (app' T1 T2).
+trans_lam : ({x:exp} (trans x (bvar' (var_z : variable (s N) ))) -> trans (E x) (T: term (s N) )) -> trans (lam E) (lam' T).
+trans_var : trans E (bvar' M) -> trans E (bvar' (var_s M)).
+
+eqexp : exp -> exp -> type.
+eqid : eqexp E E.
+
+eqterm : term N -> term N -> type.
+eqtermid : eqterm T T.
+
+empty : type.
+
+lt : nat -> nat -> type.
+lt_b : lt M (s M).
+lt_ind : lt M N -> lt M (s N).
+
+isParam : (trans E (bvar' B)) -> type.
+
+%block param1 : some{N:nat}block{x:exp}{d:trans x (bvar' (var_z : variable (s N)))}{p: isParam d}.
+bug : {x}{d: trans x (bvar' (var_z : variable (s N) ))}{p:isParam d} {N':nat} {_ : lt N N'}
+      {B:variable N'} {E:exp} {d' : trans E (bvar' B)} {p' : isParam d'}{_ : empty} type.
+
+%mode bug +X +D +P +N' +L +B +E +D' +P' -E.
+%worlds (param1) (bug _ _ _ _ _ _ _ _ _ _).
+%covers bug +X +D +P +N' +L +B +E +D' +P' -E.

@@ -1,5 +1,5 @@
 (* Translation from simply-typed lambda calculus into combinator calculus *)
-
+(* Simplified using Delphin "with" syntactic sugar.. *)
 (* Dependently-typed Version *)
 (* Author: Adam Poswolsky, Carsten schuermann *)
 
@@ -19,13 +19,7 @@ sig <comb : tp -> type>
     <s : comb ((A ar B ar C) ar (A ar B) ar A ar C) > 
     <mp : comb (A ar B) -> comb A -> comb B> ;
 
-fun extendC : (<A:tp> -> <D: exp A#> -> <comb A>) -> <B:tp> -> {<x:exp B#>}{<y:comb B#>}(<A:tp> -> <D: exp A#> -> <comb A>) = 
-  fn W => fn <B> => fn {<x>} {<y>} (<B> => fn x => <y>) 
-	            | [<e>] {<x>} {<u>} (<_> => fn e =>  let
-							   val result = W <_> e
-							 in
-							   {<x>}{<u>} result
-							 end \x \u);
+params = <tp>, <exp A>, <comb A>;
 
 fun ba : <comb A -> comb B> -> <comb (A ar B)> 
   = fn <F> => <mp (mp s k) (k : comb (A ar A ar A))>
@@ -35,12 +29,12 @@ fun ba : <comb A -> comb B> -> <comb (A ar B)>
 
 
 fun convert : _  -> <D:exp A> -> <comb A> =
-      fn W <lam D'> => (case ({<d>}{<u>} convert ((extendC W <_>) \d \u) <D' d>)
+      fn W <lam D'> => (case ({<d>}{<u>} convert (W with <d> => <u>) <D' d>)
 	                                       of ({<d>}{<u>} <D'' u>) => ba <D''>) 
        | W <app D1 D2> => (case ((convert W <D1>), (convert W <D2>))
 	                                      of (<U1>,<U2>) => <mp U1 U2>) 
 	     
-       | W [<x:exp A#>] <x> => W <A> x;
+       | W <x#> => W <A> <x>;
 
 val testConvert1 = {<A>} {<B>} convert (fn .) <lam [u:exp A] lam [v:exp B] u> ;
 val testConvert2 = {<A>} convert (fn .)  <lam [x:exp A] x> ;

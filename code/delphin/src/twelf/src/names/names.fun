@@ -810,7 +810,7 @@ struct
        Invariant: 1 <= k <= |G|
                   G_k must assign a name
        If no name has been assigned, the context might be built the wrong
-       way---check decName below instread of IntSyn.Dec
+       way---check decName below instead of IntSyn.Dec
     *)
     fun bvarName (G, k) =
         (case IntSyn.ctxLookup (G, k)
@@ -823,8 +823,8 @@ struct
 			     * in the codomain.. We should get rid of ALL NDecs
 			     * but for NOW we will just surpress it from output.
 			     *)
-			     
-	    | _ => "?" (* should be impossible *)
+		
+	    | _ => "?" (* unnamed?  should be impossible if you name the context before printing *)
 	    (* | _ => raise Unprintable *)
 	     )
               (* NONE should not happen *)

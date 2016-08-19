@@ -20,24 +20,24 @@ type expEnv = <E:exp#> -> <scheme>;
 type tpEnv  = <T:tp#> -> <scheme>; 
 
 fun extendW : expEnv -> <T':scheme> -> {<x:exp#>} expEnv
-           = fn W => fn <T'> => fn {<x>} (x => <T'>)
-                               | [<x'>]{<x>} (x' =>   (let
-                                                         val result = W x'
+           = fn W => fn <T'> => fn {<x>} (<x> => <T'>)
+                               | {<x>} (<x'> =>   (let
+                                                         val result = W <x'>
                                                        in
                                                          {<x>} result
                                                        end) \x);
 
 fun extendG : tpEnv -> {<t:tp#>} tpEnv
-           = fn G => fn {<x>} (x => <! x>)
-                      | [<x'>]{<x>} (x' => (let
-                                              val result = G x'
+           = fn G => fn {<x>} (<x> => <! x>)
+                      | {<x>} (<x'> => (let
+                                              val result = G <x'>
                                             in
                                               {<x>} result
                                             end)\x );
 
 
 fun normalize : tpEnv -> <scheme> -> <scheme> =
-    fn G [<t#>]<! t> => (case (G t) 
+    fn G <! t#> => (case (G <t>) 
                         of <! t> => <! t>
                          | <S> => normalize G <S>)
      | G <! (cross T1 T2)> => let
@@ -62,28 +62,28 @@ fun normalize : tpEnv -> <scheme> -> <scheme> =
 
 
 fun shrinkG : ({<t:tp#>} tpEnv) -> tpEnv
-            = fn G [<t2#>]t2 => case {<t>} normalize (G \t) <! t2>
+            = fn G <t2#> => case {<t>} normalize (G \t) <! t2>
                                   of {<t>} <T> => <T> 
                                    | {<t>} <T t> => <forall T>;
 
 fun shrinkGB : ({<x:exp#>} tpEnv) -> tpEnv
-            = fn G [<t2#>]t2 => case {<x>} normalize (G \x) <! t2>
+            = fn G <t2#> => case {<x>} normalize (G \x) <! t2>
                                   of {<x>} <T> => <T>;
 
 fun shrinkGtwice : ({<t1:tp#>} {<t2:tp#>} tpEnv) -> tpEnv
-            = fn G [<t3#>]t3 => case {<t1>}{<t2>} normalize (G \t1 \t2) <! t3>
+            = fn G <t3#> => case {<t1>}{<t2>} normalize (G \t1 \t2) <! t3>
                                   of {<t1>}{<t2>} <T> => <T> 
                                    | {<t1>}{<t2>} <T t1> => <forall T> 
                                    | {<t1>}{<t2>} <T t2> => <forall T> 
                                    | {<t1>}{<t2>} <T t1 t2> => <forall [t1] forall [t2] T t1 t2>;
 
 fun shrinkGtwiceB : ({<t2:tp#>} {<x:exp#>} tpEnv) -> tpEnv
-            = fn G [<t3#>]t3 => case {<t2>}{<x>} normalize (G \t2 \x) <! t3>
+            = fn G <t3#> => case {<t2>}{<x>} normalize (G \t2 \x) <! t3>
                                   of {<t2>}{<x>} <T> => <T> 
                                    | {<t2>}{<x>} <T t2> => <forall T>;
 
 fun shrinkGthrice : ({<t1:tp#>} {<x:exp#>} {<t2:tp#>} tpEnv) -> tpEnv
-            = fn G [<t3#>]t3 => case {<t1>}{<x>}{<t2>} normalize (G \t1 \x \t2) <! t3>
+            = fn G <t3#> => case {<t1>}{<x>}{<t2>} normalize (G \t1 \x \t2) <! t3>
                                   of {<t1>}{<x>}{<t2>} <T> => <T> 
                                    | {<t1>}{<x>}{<t2>} <T t1> => <forall T> 
                                    | {<t1>}{<x>}{<t2>} <T t2> => <forall T> 
@@ -101,11 +101,11 @@ and unifyScheme : tpEnv -> <scheme> -> <scheme> -> tpEnv =
 	  fn G <S1> <S2> => unifySchemeN G (normalize G <S1>) (normalize G <S2>)
 
 and unifySchemeN : tpEnv -> <scheme> -> <scheme> -> tpEnv =
-     fn G [<t#>]<! t> <! t> => G
-      | G [<t#>]<! t> <T> => (fn t => <T>
-                               | [<t'#>]t' => G t') 
-      | G <T> [<t#>]<! t> => (fn t => <T>
-                             | [<t'#>]t' => G t')
+     fn G <! t#> <! t> => G
+      | G <! t#> <T> => (fn <t> => <T>
+                         | <t'> => G <t'>) 
+      | G <T> <! t#> => (fn <t> => <T>
+                          | <t'#> => G <t'>)
       | G <! (cross T1 T2)> <! (cross T3 T4)> => 
                          let
                              val G2 = unifyTypes G <T1> <T3>
@@ -162,7 +162,7 @@ and checkTypeSchemaN : tpEnv -> <scheme> -> <tp> -> <tp> -> (tpEnv -> tpEnv) -> 
 
 (* checkType expEnvironment tpEnvironment exp continuation *) 
 fun checkType : expEnv -> tpEnv -> <exp> -> <tp> -> (tpEnv -> tpEnv) ->  tpEnv =
-     fn W G [<x#>]<x> <T> K => K (unifyScheme G (W x) <! T>) 
+     fn W G <x#> <T> K => K (unifyScheme G (W <x>) <! T>) 
       | W G <z> <T> K => K (unifyTypes G <nat> <T>)
       | W G <s E> <T> K => checkType W G <E> <nat> (fn G2 => K (unifyTypes G2 <nat> <T>))
       | W G <case E1 E2 E3> <T> K =>
@@ -293,7 +293,7 @@ fun checkType : expEnv -> tpEnv -> <exp> -> <tp> -> (tpEnv -> tpEnv) ->  tpEnv =
 fun inferType : <exp> -> <scheme> 
  = fn <E> => let
                (* warning:  If you make this "val G" then you cannot use "G" as a fresh pattern variable below.. *)
-               val G99 = {<t>} checkType (fn .) (fn [<t'#>]t' => <! t'>) <E> <t> (fn G' => G')
+               val G99 = {<t>} checkType (fn .) (fn <t'#> => <! t'>) <E> <t> (fn G' => G')
 
                fun getType : ({<t:tp#>} tpEnv) -> <scheme>
                     = fn G  => case {<t>} normalize (G \t) <! t>

@@ -55,7 +55,7 @@ sig
 
   and BoundVar =
       Fixed of int
-    | BVarVar of ((BoundVar option) ref * Exp * (int list)) * Sub (* (r : A, list) [t] *)
+    | BVarVar of ((BoundVar option) ref * Exp * (int list) * (Cnstr ref) list ref) * Sub (* (r : A, list, cnstrs) [t] *)
                                        (* list contains indices in the context that are parameters.
 					* this can only be unified with these indices *)
 
@@ -109,7 +109,8 @@ sig
 
   and Cnstr =				(* Constraint:                *)
     Solved                      	(* Cnstr ::= solved           *)
-  | Eqn      of Dec Ctx * Dec Ctx * Exp * Exp     (*   | Gglobal, G|-(U1 == U2)    *)
+  | Eqn      of Dec Ctx * Dec Ctx * Exp * Exp                (*   | Gglobal, G|-(U1 == U2)    *)
+  | EqnB      of Dec Ctx * Dec Ctx * BoundVar * BoundVar     (*   | Gglobal, G|-(U1 == U2)    *)
   | FgnCnstr of csid * FgnCnstr         (*         | (foreign)        *)
 
   and Status =                          (* Status of a constant:      *)

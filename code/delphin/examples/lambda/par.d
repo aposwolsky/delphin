@@ -5,13 +5,15 @@ sig	<exp : type>
 	<app : exp -> exp -> exp>
 	<lam : (exp -> exp) -> exp>;
 
+params = <exp> ;
+
 fun par : <exp> -> <exp> =
- fn [<x:exp#>]  <x> => <x>
+ fn <x#> => <x>
  | <app E1 E2> =>  par' <E1> (par <E2>)
  | <lam E1>    =>  case {<x:exp#>} par <E1 x> of ({<x>}<F1 x> => <lam F1>)
 
 and par' : <exp> -> <exp> -> <exp> =
- fn [<x:exp#>] <x> => (fn <E3> => <app x E3>)
+ fn <x#> => (fn <E3> => <app x E3>)
  | <app E1 E2> => (fn <E2'> => <app> @ (par' <E1> (par <E2>)) @ <E2'>)
  | <lam E1> => (fn <E2'> =>  
      case {<x:exp#>} par <E1 x> of ({<x>}<F1 x> => <F1 E2'>)) ;

@@ -34,6 +34,18 @@ local
   fun Str0 (s, n) = F.String0 n s
   fun sym (s) = Str0 (Symbol.sym s)
 
+  (* ABP:  markedList indicates variables that we want to print a "#" after. *)
+  fun addOne markedList = List.map (fn x => x+1) markedList
+
+  fun bvarName(markedList, G, n) =
+      let
+	val s = Names.bvarName(G, n)	  
+      in
+	case (List.find (fn x => (x = n)) markedList)
+	  of NONE => s
+	   | _ (* mark it! *) => s ^ "#"
+      end
+
   fun nameOf (SOME(id)) = id
     | nameOf (NONE) = "_"
 
@@ -234,32 +246,37 @@ local
      maintained in the names module.
      FVar's are printed with a preceding "`" (backquote) character
   *)
-  fun fmtCon (G, I.BVar(I.Fixed n)) = (* Str0 (Symbol.bvar (Names.bvarName(G, n))) *)
+  fun fmtCon (markedList, G, I.BVar(I.Fixed n)) = 
               let
 		(* ABP:  Now bvarName can return an empty string.. *)
-		val s = Names.bvarName(G, n)		  
+		val s = bvarName(markedList, G, n)		  
 	      in 
 		if (String.size s) > 0 then
 		  Str0 (Symbol.bvar s)
 		else
-		  Str0 ("", 0) (* Can remove this once/if we remove NDecs *)
+		  F.empty      (* Can remove this once/if we remove NDecs *)
+	                       (* Note that G = Gglobal, Glocal
+				* and Gglobal will have NDecs, but Glocal should not.
+				* Therefore, we could also pass around Gglobal 
+				* instead of doing this...
+				*)
 	      end
 
 
-    | fmtCon (G, I.BVar _) = Str ("??") (* ABP:  Is it in whnf.. if so, then this is a BVarVar *)
-    | fmtCon (G, I.Const(cid)) = fmtConstPath (Symbol.const, Names.constQid (cid))
-    | fmtCon (G, I.Skonst(cid)) = fmtConstPath (Symbol.skonst, Names.constQid (cid))
-    | fmtCon (G, I.Def(cid)) = fmtConstPath (Symbol.def, Names.constQid (cid))
-    | fmtCon (G, I.NSDef (cid)) = fmtConstPath (Symbol.def, Names.constQid (cid))
-    | fmtCon (G, I.FVar (name, isP, _, _)) = Str0 (Symbol.fvar (name))
-    | fmtCon (G, H as I.Proj (I.Bidx(k), i)) =
+    | fmtCon (markedList, G, I.BVar _) = Str ("??") (* ABP:  Is it in whnf.. if so, then this is a BVarVar *)
+    | fmtCon (markedList, G, I.Const(cid)) = fmtConstPath (Symbol.const, Names.constQid (cid))
+    | fmtCon (markedList, G, I.Skonst(cid)) = fmtConstPath (Symbol.skonst, Names.constQid (cid))
+    | fmtCon (markedList, G, I.Def(cid)) = fmtConstPath (Symbol.def, Names.constQid (cid))
+    | fmtCon (markedList, G, I.NSDef (cid)) = fmtConstPath (Symbol.def, Names.constQid (cid))
+    | fmtCon (markedList, G, I.FVar (name, isP, _, _)) = Str0 (Symbol.fvar (name))
+    | fmtCon (markedList, G, H as I.Proj (I.Bidx(k), i)) =
         Str0 (Symbol.const (projName (G, H)))
-    | fmtCon (G, H as I.Proj (I.LVar(_, sk, (cid, t)), i)) =
+    | fmtCon (markedList, G, H as I.Proj (I.LVar(_, sk, (cid, t)), i)) =
       (* identity of LVars is obscured! *)
 					(* LVar fixed Sun Dec  1 11:36:55 2002 -cs *)
       fmtConstPath (fn l0 => Symbol.const ("#[" ^ l0 ^ "]" ^ projName (G, H)), (* fix !!! *)
 		    Names.constQid (cid))
-    | fmtCon (G, I.FgnConst (cs, conDec)) =
+    | fmtCon (markedList, G, I.FgnConst (cs, conDec)) =
         let
           (* will need to be changed if qualified constraint constant
              names are introduced... anyway, why should the user be
@@ -278,12 +295,12 @@ local
      This is an implicit form of raising.
   *)
   fun evarArgs (G, d, X, s) =
-      OpArgs (FX.Nonfix, [fmtEVar(G, X)],
-	      subToSpine (I.ctxLength(G), s))
+	OpArgs (FX.Nonfix, [fmtEVar(G, X)],
+		subToSpine (I.ctxLength(G), s))
 
 
   fun evarArgs' (G, d, X, s) =
-      OpArgs (FX.Nonfix, [fmtAVar(G, X)],
+	OpArgs (FX.Nonfix, [fmtAVar(G, X)],
 	      subToSpine (I.ctxLength(G), s))
 
   (* fst (S, s) = U1, the first argument in S[s] *)
@@ -350,7 +367,8 @@ local
   fun fmtUni (I.Type) = sym "type"
     | fmtUni (I.Kind) = sym "kind"   (* impossible, included for robustness *)
 
-  (* fmtExpW (G, d, ctx, (U, s)) = fmt
+  (* ABP:  markedList indicates variables we want to print a "#" after. *)
+  (* fmtExpW (markedList, G, d, ctx, (U, s)) = fmt
      
      format the expression U[s] at printing depth d and add it to the left context
      ctx.
@@ -361,67 +379,67 @@ local
        G'' |- U : V   G' |- s : G''  (so  G' |- U[s] : V[s])
        (U,s) in whnf
   *)
-  fun fmtExpW (G, d, ctx, (I.Uni(L), s)) = aa (ctx, fmtUni(L))
-    | fmtExpW (G, d, ctx, (I.Pi((D as I.Dec(_,V1),P),V2), s)) =
+  fun fmtExpW (markedList, G, d, ctx, (I.Uni(L), s)) = aa (ctx, fmtUni(L))
+    | fmtExpW (markedList, G, d, ctx, (I.Pi((D as I.Dec(_,V1),P),V2), s)) =
       (case P (* if Pi is dependent but anonymous, invent name here *)
 	 of I.Maybe => let
 			 val D' = Names.decLUName (G, D) (* could sometimes be EName *)
 		       in
-			 fmtLevel (I.Decl (G, D'), (* I.decSub (D', s) *)
-				   d, ctx, (braces (G, d, ((D',V2), s)),
+			 fmtLevel (addOne markedList, I.Decl (G, D'), (* I.decSub (D', s) *)
+				   d, ctx, (braces (markedList, G, d, ((D',V2), s)),
 					    I.dot1 s))
 		       end
 	  | I.Meta => let
 			 val D' = Names.decLUName (G, D)
 		       in
-			 fmtLevel (I.Decl (G, D'), (* I.decSub (D', s) *)
-				   d, ctx, (braces (G, d, ((D',V2), s)),
+			 fmtLevel (addOne markedList, I.Decl (G, D'), (* I.decSub (D', s) *)
+				   d, ctx, (braces (markedList, G, d, ((D',V2), s)),
 					    I.dot1 s))
 		       end
-	  | I.No => fmtLevel (I.Decl (G, D), (* I.decSub (D, s) *)
+	  | I.No => fmtLevel (addOne markedList, I.Decl (G, D), (* I.decSub (D, s) *)
 			      d, ctx, (arrow(I.EClo(V1,I.shift), V2), I.dot1 s)))
-    | fmtExpW (G, d, ctx, (I.Pi((D as I.BDec _, P), V2), s)) =
+    | fmtExpW (markedList, G, d, ctx, (I.Pi((D as I.BDec _, P), V2), s)) =
       let
 	val D' = Names.decLUName (G, D)
       in
-	 fmtLevel (I.Decl (G, D'), d, ctx, (braces (G, d, ((D', V2), s)),
+	 fmtLevel (addOne markedList, I.Decl (G, D'), d, ctx, (braces (markedList, G, d, ((D', V2), s)),
 					    I.dot1 s))
       end
     (* -bp *)
-    | fmtExpW (G, d, ctx, (I.Pi((D as I.ADec _, P), V2), s)) =
+    | fmtExpW (markedList, G, d, ctx, (I.Pi((D as I.ADec _, P), V2), s)) =
       let
 (*	val D' = Names.decLUName (G, D) *)
 	val braces = OpArgs(FX.Prefix(binderPrec),
 			    [sym "[" , sym "_", sym "]", F.Break],
 		IntSyn.App(V2, IntSyn.Nil))
       in
-	 fmtLevel (I.Decl (G, D), d, ctx, (braces, I.dot1 s))
+	 fmtLevel (addOne markedList, I.Decl (G, D), d, ctx, (braces, I.dot1 s))
       end
 
-    | fmtExpW (G, d, ctx, (U as I.Root R, s)) = (* s = id *)
-	 fmtOpArgs (G, d, ctx, opargs (G, d, R), s)
+    | fmtExpW (markedList, G, d, ctx, (U as I.Root R, s)) = (* s = id *)
+	 fmtOpArgs (markedList, G, d, ctx, opargs (markedList, G, d, R), s)
     (* I.Redex not possible *)
-    | fmtExpW (G, d, ctx, (I.Lam(D, U), s)) = 
+    | fmtExpW (markedList, G, d, ctx, (I.Lam(D, U), s)) = 
       let
 	val D' = Names.decLUName (G, D)
       in
-	fmtLevel (I.Decl (G, D'), (* I.decSub (D', s) *)
-		  d, ctx, (brackets (G, d, ((D', U), s)), I.dot1 s))
+	fmtLevel (addOne markedList, I.Decl (G, D'), (* I.decSub (D', s) *)
+		  d, ctx, (brackets (markedList, G, d, ((D', U), s)), I.dot1 s))
       end
-    | fmtExpW (G, d, ctx, (X as I.EVar _, s)) =
+    | fmtExpW (markedList, G, d, ctx, (X as I.EVar _, s)) =
       (* assume dereferenced during whnf *)
-      if !implicit then aa (ctx, F.HVbox (fmtEVar(G,X)::fmtSub(G,d,s)))
-      else fmtOpArgs (G, d, ctx, evarArgs (G, d, X, s), I.id)
+      if !implicit then aa (ctx, F.HVbox (fmtEVar(G,X)::fmtSub(markedList, G,d,s)))
+      else fmtOpArgs (markedList, G, d, ctx, evarArgs (G, d, X, s), I.id)
 
-    | fmtExpW (G, d, ctx, (X as I.AVar _, s)) =
+    | fmtExpW (markedList, G, d, ctx, (X as I.AVar _, s)) =
       (* assume dereferenced during whnf *)
-      if !implicit then aa (ctx, F.HVbox (fmtAVar(G,X)::fmtSub(G,d,s)))
-      else fmtOpArgs (G, d, ctx, evarArgs' (G, d, X, s), I.id)
+      if !implicit then aa (ctx, F.HVbox (fmtAVar(G,X)::fmtSub(markedList, G,d,s)))
+      else fmtOpArgs (markedList, G, d, ctx, evarArgs' (G, d, X, s), I.id)
 
-    | fmtExpW (G, d, ctx, (U as I.FgnExp csfe, s)) =
-      fmtExp (G, d, ctx, (I.FgnExpStd.ToInternal.apply csfe (), s))
+    | fmtExpW (markedList, G, d, ctx, (U as I.FgnExp csfe, s)) =
+      fmtExp (markedList, G, d, ctx, (I.FgnExpStd.ToInternal.apply csfe (), s))
 
-    | fmtExpW (G, d, ctx, (U, s)) = Str "??(bug)??"
+    | fmtExpW (markedList, G, d, ctx, (U, s)) = Str "??(bug)??"
     (* I.EClo not possible for Whnf *)
 
   (* for internal printing *)
@@ -430,7 +448,7 @@ local
      arguments.  In this form, infix, prefix, and postfix declarations
      are ignored.
   *)
-  and opargsImplicit (G, d, (C,S)) = OpArgs (FX.Nonfix, [fmtCon(G,C)], S)
+  and opargsImplicit (markedList, G, d, (C,S)) = OpArgs (FX.Nonfix, [fmtCon(markedList, G,C)], S)
 
   (* for external printing *)
   (* opargsExplicit (G, (C, S)) = oa
@@ -438,9 +456,9 @@ local
      arguments and taking operator fixity declarations into account.
      G |- C @ S (no substitution involved)
   *)
-  and opargsExplicit (G, d, R as (C,S)) =
+  and opargsExplicit (markedList, G, d, R as (C,S)) =
       let
-	val opFmt = fmtCon (G, C)
+	val opFmt = fmtCon (markedList, G, C)
 	val fixity = fixityCon C
 	fun oe (Exact(S')) =
 	    (case fixity
@@ -454,7 +472,7 @@ local
 	    (* S' - all non-implicit arguments *)
 	    (* S'' - extra arguments *)
 	    let
-	      val opFmt' = fmtOpArgs (G, d, noCtxt, oe (Exact (S')), I.id)
+	      val opFmt' = fmtOpArgs (markedList, G, d, noCtxt, oe (Exact (S')), I.id)
 	    in
 	      (* parens because juxtaposition has highest precedence *)
 	      (*
@@ -471,9 +489,9 @@ local
      converts C @ S to operator/arguments form, depending on the
      value of !implicit
   *)
-  and opargs (G, d, R) =
-      if !implicit then opargsImplicit (G, d, R)
-      else opargsExplicit (G, d, R)
+  and opargs (markedList, G, d, R) =
+      if !implicit then opargsImplicit (markedList, G, d, R)
+      else opargsExplicit (markedList, G, d, R)
 
   (* fmtOpArgs (G, d, ctx, oa, s) = fmt
      format the operator/arguments form oa at printing depth d and add it
@@ -481,12 +499,12 @@ local
 
      G is a printing context approximating G', and G' |- oa[s] is valid.
   *)
-  and fmtOpArgs (G, d, ctx, oa as OpArgs(_, opFmts, S'), s) =
+  and fmtOpArgs (markedList, G, d, ctx, oa as OpArgs(_, opFmts, S'), s) =
       if isNil S'
 	then aa (ctx, List.hd opFmts)	(* opFmts = [fmtCon(G,C)] *)
-      else fmtLevel (G, d, ctx, (oa, s))
-    | fmtOpArgs (G, d, ctx, EtaLong(U'), s) =
-	fmtExpW (G, d, ctx, (U', s))
+      else fmtLevel (markedList, G, d, ctx, (oa, s))
+    | fmtOpArgs (markedList, G, d, ctx, EtaLong(U'), s) =
+	fmtExpW (markedList, G, d, ctx, (U', s))
 
   (* fmtSub (G, d, s) = fmt
      format substitution s at printing depth d and printing context G.
@@ -494,46 +512,53 @@ local
      This is used only when !implicit = true, that is, when the internal
      representation is printed.  Note that a substitution is not reparsable
   *)
-  and fmtSub (G, d, s) = Str "[" :: fmtSub' (G, d, 0, s)
-  and fmtSub' (G, d, l, s) = if elide l then [ldots] else fmtSub'' (G, d, l, s)
-  and fmtSub'' (G, d, l, I.Shift(k)) = [Str ("^" ^ Int.toString k), Str "]"]
-    | fmtSub'' (G, d, l, I.Dot(I.Idx(k), s)) =        
-        Str (Names.bvarName (G, k)) :: Str "." :: F.Break :: fmtSub' (G, d, l+1, s)
-    | fmtSub'' (G, d, l, I.Dot(I.Exp(U), s)) =
-	fmtExp (G, d+1, noCtxt, (U, I.id))
-	:: Str "." :: F.Break :: fmtSub' (G, d, l+1, s)
+  and fmtSub (markedList, G, d, s) = Str "[" :: fmtSub' (markedList, G, d, 0, s)
+  and fmtSub' (markedList, G, d, l, s) = if elide l then [ldots] else fmtSub'' (markedList, G, d, l, s)
+  and fmtSub'' (markedList, G, d, l, I.Shift(k)) = [Str ("^" ^ Int.toString k), Str "]"]
+    | fmtSub'' (markedList, G, d, l, I.Dot(I.Idx(k), s)) =        
+        Str (bvarName (markedList, G, k)) :: Str "." :: F.Break :: fmtSub' (markedList, G, d, l+1, s)
+    | fmtSub'' (markedList, G, d, l, I.Dot(I.Exp(U), s)) =
+	fmtExp (markedList, G, d+1, noCtxt, (U, I.id))
+	:: Str "." :: F.Break :: fmtSub' (markedList, G, d, l+1, s)
 
   (* fmtExp (G, d, ctx, (U, s)) = fmt
      format or elide U[s] at printing depth d and add to the left context ctx.
 
      G is a printing context approximation G' and G' |- U[s] is valid.
   *)
-  and fmtExp (G, d, ctx, (U, s)) =
+  and fmtExp (markedList, G, d, ctx, (U, s)) =
 	 if exceeded(d,!printDepth)
 	    then sym "%%"
-	    else fmtExpW (G, d, ctx, Whnf.whnf (U, s))
+	    else fmtExpW (markedList, G, d, ctx, Whnf.whnf (U, s))
 
   (* fmtSpine (G, d, l, (S, s)) = fmts
      format spine S[s] at printing depth d, printing length l, in printing
      context G which approximates G', where G' |- S[s] is valid
   *)
-  and fmtSpine (G, d, l, (I.Nil, _)) = []
-    | fmtSpine (G, d, l, (I.SClo (S, s'), s)) =
-         fmtSpine (G, d, l, (S, I.comp(s',s)))
-    | fmtSpine (G, d, l, (I.App(U, S), s)) =
+  and fmtSpine (markedList, G, d, l, (I.Nil, _)) = []
+    | fmtSpine (markedList, G, d, l, (I.SClo (S, s'), s)) =
+         fmtSpine (markedList, G, d, l, (S, I.comp(s',s)))
+    | fmtSpine (markedList, G, d, l, (I.App(U, S), s)) =
 	 if elide (l) then []		(* necessary? *)
 	 else if addots (l) then [ldots]
-	      else fmtExp (G, d+1, appCtxt, (U, s))
-		   :: fmtSpine' (G, d, l, (S, s))
+	      else 
+		let
+		  val fmt = fmtExp (markedList, G, d+1, appCtxt, (U, s))
+		in
+		  if F.isEmpty fmt then
+		    fmtSpine (markedList, G, d, l, (S, s))
+		  else
+		    fmt :: fmtSpine' (markedList, G, d, l, (S, s))
+		end
 
   (* fmtSpine' (G, d, l, (S, s)) = fmts
      like fmtSpine, but will add leading "Break" and increment printing length
   *)
-  and fmtSpine' (G, d, l, (I.Nil, _)) = []
-    | fmtSpine' (G, d, l, (I.SClo (S, s'), s)) =
-        fmtSpine' (G, d, l, (S, I.comp(s', s)))
-    | fmtSpine' (G, d, l, (S, s)) =
-	F.Break :: fmtSpine (G, d, l+1, (S, s))
+  and fmtSpine' (markedList, G, d, l, (I.Nil, _)) = []
+    | fmtSpine' (markedList, G, d, l, (I.SClo (S, s'), s)) =
+        fmtSpine' (markedList, G, d, l, (S, I.comp(s', s)))
+    | fmtSpine' (markedList, G, d, l, (S, s)) =
+	F.Break :: fmtSpine (markedList, G, d, l+1, (S, s))
 
   (* fmtLevel (G, d, ctx, (oa, s)) = fmt
 
@@ -546,68 +571,77 @@ local
      form and decides how to extend the accumulator and whether to insert
      parentheses.
   *)
-  and fmtLevel (G, d, Ctxt (fixity', accum, l),
+  and fmtLevel (markedList, G, d, Ctxt (fixity', accum, l),
 		(OpArgs (fixity as FX.Nonfix, fmts, S), s)) =
       let
-	val atm = fmtSpine (G, d, 0, (S,s))
-	(* atm must not be empty, otherwise bug below *)
+	val atm = fmtSpine (markedList, G, d, 0, (S,s))
       in
-	(* F.HVbox doesn't work if last item of HVbox is F.Break *)
-	addAccum (parens ((fixity',fixity), F.HVbox (fmts @ [F.Break] @ atm)),
-		  fixity', accum)
-        (* possible improvement along the following lines: *)
-	(*
-	   if (#2 (F.Width (F.Hbox (fmts)))) < 4
-	   then F.Hbox [F.Hbox(fmts), F.HVbox0 1 1 1 atm]
-	   else ...
-        *)
+	case atm
+	  of nil =>
+	     (* F.HVbox doesn't work if last item of HVbox is F.Break *)
+	      (* So we add F.empty to the end of it so we are safe.. *)
+	    addAccum (F.HVbox (fmts @ [F.empty]) ,
+		      fixity', accum)
+
+	   | _ => 
+	     (* F.HVbox doesn't work if last item of HVbox is F.Break *)
+	      (* So we add F.empty to the end of it so we are safe.. *)
+	    addAccum (parens ((fixity',fixity), F.HVbox (fmts @ [F.Break] @ atm @ [F.empty]) ),
+		      fixity', accum)
+
+               (* possible improvement along the following lines: *)
+               (*
+		if (#2 (F.Width (F.Hbox (fmts)))) < 4
+	        then F.Hbox [F.Hbox(fmts), F.HVbox0 1 1 1 atm]
+	        else ...
+                *)
       end
 
-    | fmtLevel (G, d, Ctxt (fixity', accum, l),
+    | fmtLevel (markedList, G, d, Ctxt (fixity', accum, l),
 		(OpArgs (fixity as (FX.Infix(p, FX.Left)), fmts, S), s)) =
       let val accMore = eqFix (fixity, fixity')
 	val rhs = if accMore andalso elide(l) then []
 		  else if accMore andalso addots(l) then fmts @ [ldots]
-		       else fmts @ [fmtExp (G, d+1, Ctxt (FX.Infix(p,FX.None),nil,0),
+		       else fmts @ [fmtExp (markedList, G, d+1, Ctxt (FX.Infix(p,FX.None),nil,0),
 					    snd (S, s))]
       in
 	if accMore
-	  then fmtExp (G, d, Ctxt (fixity, rhs @ accum, l+1), fst (S, s))
+	  then fmtExp (markedList, G, d, Ctxt (fixity, rhs @ accum, l+1), fst (S, s))
 	else let
-	       val both = fmtExp (G, d, Ctxt (fixity, rhs, 0), fst (S, s))
+	       val both = fmtExp (markedList, G, d, Ctxt (fixity, rhs, 0), fst (S, s))
 	     in
 	       addAccum (parens ((fixity',fixity), both), fixity', accum)
 	     end
       end
 
-    | fmtLevel (G, d, Ctxt (fixity', accum, l),
+    | fmtLevel (markedList, G, d, Ctxt (fixity', accum, l),
 		(OpArgs (fixity as FX.Infix(p, FX.Right), fmts, S), s)) =
       let
 	  val accMore = eqFix (fixity, fixity')
 	  val lhs = if accMore andalso elide(l) then []
 		    else if accMore andalso addots(l) then [ldots] @ fmts
-			 else [fmtExp (G, d+1, Ctxt (FX.Infix(p,FX.None),nil,0), fst(S, s))] @ fmts
+			 else [fmtExp (markedList, G, d+1, Ctxt (FX.Infix(p,FX.None),nil,0), fst(S, s))] @ fmts
       in
 	if accMore
-	  then fmtExp (G, d, Ctxt (fixity, accum @ lhs, l+1), snd (S, s))
+	  then fmtExp (markedList, G, d, Ctxt (fixity, accum @ lhs, l+1), snd (S, s))
 	else let
-	       val both = fmtExp (G, d, Ctxt (fixity, lhs, 0), snd (S, s))
+	       val both = fmtExp (markedList, G, d, Ctxt (fixity, lhs, 0), snd (S, s))
 	     in
 	       addAccum (parens ((fixity', fixity), both), fixity', accum)
 	     end
       end
 
-    | fmtLevel (G, d, Ctxt (fixity', accum, l),
+    | fmtLevel (markedList, G, d, Ctxt (fixity', accum, l),
 		(OpArgs(fixity as (FX.Infix(_,FX.None)), fmts, S), s)) =
       let
-	  val lhs = fmtExp (G, d+1, Ctxt (fixity, nil, 0), fst(S, s))
-	  val rhs = fmtExp (G, d+1, Ctxt (fixity, nil, 0), snd(S, s))
+	  val lhs = fmtExp (markedList, G, d+1, Ctxt (fixity, nil, 0), fst(S, s))
+	  val rhs = fmtExp (markedList, G, d+1, Ctxt (fixity, nil, 0), snd(S, s))
       in
 	addAccum (parens ((fixity',fixity),
 			  F.HVbox ([lhs] @ fmts @ [rhs])), fixity', accum)
       end
 
-    | fmtLevel (G, d, Ctxt (fixity', accum, l),
+    | fmtLevel (markedList, G, d, Ctxt (fixity', accum, l),
 		(OpArgs (fixity as (FX.Prefix _), fmts, S), s)) =
       let
 	  val accMore = eqFix (fixity', fixity)
@@ -616,15 +650,15 @@ local
 			 else fmts
       in
 	if accMore
-	  then fmtExp (G, d, Ctxt (fixity, accum @ pfx, l+1), fst(S, s))
+	  then fmtExp (markedList, G, d, Ctxt (fixity, accum @ pfx, l+1), fst(S, s))
 	else let
-	       val whole = fmtExp (G, d, Ctxt (fixity, pfx, 0), fst (S, s))
+	       val whole = fmtExp (markedList, G, d, Ctxt (fixity, pfx, 0), fst (S, s))
 	     in
 	       addAccum (parens ((fixity',fixity), whole), fixity', accum)
 	     end
       end
 
-    | fmtLevel (G, d, Ctxt (fixity', accum, l),
+    | fmtLevel (markedList, G, d, Ctxt (fixity', accum, l),
 		(OpArgs (fixity as (FX.Postfix _), fmts, S), s)) =
       let
 	  val accMore = eqFix (fixity', fixity)
@@ -633,9 +667,9 @@ local
 			 else fmts
       in
 	if accMore
-	  then fmtExp (G, d, Ctxt (fixity, pfx @ accum, l+1), fst(S, s))
+	  then fmtExp (markedList, G, d, Ctxt (fixity, pfx @ accum, l+1), fst(S, s))
 	else let
-	       val whole = fmtExp (G, d, Ctxt (fixity, pfx, 0), fst (S, s))
+	       val whole = fmtExp (markedList, G, d, Ctxt (fixity, pfx, 0), fst (S, s))
 	     in
 	       addAccum (parens ((fixity', fixity), whole), fixity', accum)
 	     end
@@ -650,9 +684,9 @@ local
       G' |- D[s] decl
       G' |- V : L  [NOTE: s does not apply to V!]
   *)
-  and braces (G, d, ((D,V), s)) =
+  and braces (markedList, G, d, ((D,V), s)) =
 	 OpArgs(FX.Prefix(binderPrec),
-		[sym "{" , fmtDec (G, d, (D,s)), sym "}", F.Break],
+		[sym "{" , fmtDec (markedList, G, d, (D,s)), sym "}", F.Break],
 		IntSyn.App(V, IntSyn.Nil))
 
   (* brackets (G, d, ((D, U), s)) = oa
@@ -664,9 +698,9 @@ local
       G' |- D[s] decl
       G' |- U : V  [NOTE: s does not apply to U!]
   *)
-  and brackets (G, d, ((D,U), s)) =
+  and brackets (markedList, G, d, ((D,U), s)) =
 	 OpArgs(FX.Prefix(binderPrec),
-		[sym "[" , fmtDec (G, d, (D,s)), sym "]", F.Break],
+		[sym "[" , fmtDec (markedList, G, d, (D,s)), sym "]", F.Break],
 		IntSyn.App(U, IntSyn.Nil))
 
   (* fmtDec (G, d, (D, s)) = fmt
@@ -675,33 +709,33 @@ local
      Invariants:
       G' |- D[s] decl
   *)
-  and fmtDec (G, d, (I.Dec (x, V), s)) =
-      F.HVbox [Str0 (Symbol.bvar (nameOf (x))), sym ":", fmtExp (G, d+1, noCtxt, (V,s))]
+  and fmtDec (markedList, G, d, (I.Dec (x, V), s)) =
+      F.HVbox [Str0 (Symbol.bvar (nameOf (x))), sym ":", fmtExp (markedList, G, d+1, noCtxt, (V,s))]
       (* alternative with more whitespace *)
       (* F.HVbox [Str0 (Symbol.bvar (nameOf (x))), F.Space, sym ":", F.Break,
                   fmtExp (G, d+1, noCtxt, (V,s))]
       *)
-    | fmtDec (G, d, (I.BDec (x, (cid, t)), s)) =
+    | fmtDec (markedList, G, d, (I.BDec (x, (cid, t)), s)) =
       let
 	val (Gsome, Gblock) = I.constBlock cid
       in
 	F.HVbox ([Str0 (Symbol.const (nameOf (x))), sym ":"]
-		 @ fmtDecList' (G, (Gblock, I.comp (t, s))))
+		 @ fmtDecList' (markedList, G, (Gblock, I.comp (t, s))))
       end
-    | fmtDec (G, d, (I.ADec (x, _), s)) =
+    | fmtDec (markedList, G, d, (I.ADec (x, _), s)) =
       F.HVbox [Str0 (Symbol.bvar (nameOf (x))), sym ":_"]
-     | fmtDec (G, d, (I.NDec, s)) =
+     | fmtDec (markedList, G, d, (I.NDec, s)) =
       F.HVbox [ sym "XXX"]
      (* alternative with more whitespace *)
       (* F.HVbox [Str0 (Symbol.bvar (nameOf (x))), F.Space, sym ":", F.Break,
                   fmtExp (G, d+1, noCtxt, (V,s))]
       *)
-  and fmtDecList' (G0, (nil, s)) = nil
-    | fmtDecList' (G0, (D::nil, s)) = 
-        sym "{" :: fmtDec (G0, 0, (D, s)) :: sym "}" :: nil
-    | fmtDecList' (G0, (D::L, s)) =
-	sym "{" :: fmtDec (G0, 0, (D, s)) :: sym "}" :: F.Break
-	:: fmtDecList' (I.Decl (G0, D), (L, I.dot1 s))
+  and fmtDecList' (markedList, G0, (nil, s)) = nil
+    | fmtDecList' (markedList, G0, (D::nil, s)) = 
+        sym "{" :: fmtDec (markedList, G0, 0, (D, s)) :: sym "}" :: nil
+    | fmtDecList' (markedList, G0, (D::L, s)) =
+	sym "{" :: fmtDec (markedList, G0, 0, (D, s)) :: sym "}" :: F.Break
+	:: fmtDecList' (addOne markedList, I.Decl (G0, D), (L, I.dot1 s))
 
   fun skipI (0, G, V) = (G, V)
     | skipI (i, G, I.Pi ((D, _), V)) = skipI (i-1, I.Decl (G, Names.decEName (G, D)), V)
@@ -713,23 +747,23 @@ local
   fun ctxToDecList (I.Null, L) = L
     | ctxToDecList (I.Decl (G, D), L) = ctxToDecList (G, D::L)
 
-  fun fmtDecList (G0, nil) = nil
-    | fmtDecList (G0, D::nil) = 
-        sym"{"::fmtDec (G0, 0, (D, I.id))::sym"}"::nil
-    | fmtDecList (G0, D::L) =
-	sym"{"::fmtDec (G0, 0, (D, I.id))::sym"}"::F.Break
-	::fmtDecList (I.Decl (G0, D), L)
+  fun fmtDecList (markedList, G0, nil) = nil
+    | fmtDecList (markedList, G0, D::nil) = 
+        sym"{"::fmtDec (markedList, G0, 0, (D, I.id))::sym"}"::nil
+    | fmtDecList (markedList, G0, D::L) =
+	sym"{"::fmtDec (markedList, G0, 0, (D, I.id))::sym"}"::F.Break
+	::fmtDecList (addOne markedList, I.Decl (G0, D), L)
 
   (* Assume unique names are already assigned in G0 and G! *)
-  fun fmtCtx (G0, G) = fmtDecList (G0, ctxToDecList (G, nil))
+  fun fmtCtx (markedList, G0, G) = fmtDecList (markedList, G0, ctxToDecList (G, nil))
 
 
   fun fmtBlock (I.Null, Lblock)= 
-        [sym "block", F.Break] @ (fmtDecList (I.Null, Lblock))
+        [sym "block", F.Break] @ (fmtDecList ([], I.Null, Lblock))
     | fmtBlock (Gsome, Lblock) =
-        [F.HVbox ([sym "some", F.Space] @ (fmtCtx (I.Null, Gsome))),
+        [F.HVbox ([sym "some", F.Space] @ (fmtCtx ([], I.Null, Gsome))),
 	 F.Break,
-	 F.HVbox ([sym "block", F.Space] @ (fmtDecList (Gsome, Lblock)))]
+	 F.HVbox ([sym "block", F.Space] @ (fmtDecList ([], Gsome, Lblock)))]
 
   (* fmtConDec (hide, condec) = fmt
      formats a constant declaration (which must be closed and in normal form)
@@ -741,7 +775,7 @@ local
         val qid = Names.conDecQid condec
 	val _ = Names.varReset IntSyn.Null
         val (G, V) = if hide then skipI (imp, I.Null, V) else (I.Null, V)
-	val Vfmt = fmtExp (G, 0, noCtxt, (V, I.id))
+	val Vfmt = fmtExp ([], G, 0, noCtxt, (V, I.id))
       in
 	F.HVbox [fmtConstPath (Symbol.const, qid), F.Space, sym ":", F.Break, Vfmt, sym "."]
       end
@@ -750,7 +784,7 @@ local
         val qid = Names.conDecQid condec
 	val _ = Names.varReset IntSyn.Null
 	val (G, V) = if hide then skipI (imp, I.Null, V) else (I.Null, V)
-	val Vfmt = fmtExp (G, 0, noCtxt, (V, I.id))
+	val Vfmt = fmtExp ([], G, 0, noCtxt, (V, I.id))
       in
 	F.HVbox [sym "%skolem", F.Break, fmtConstPath (Symbol.skonst, qid), F.Space,
 		 sym ":", F.Break, Vfmt, sym "."]
@@ -769,9 +803,9 @@ local
         val qid = Names.conDecQid condec
 	val _ = Names.varReset IntSyn.Null
 	val (G, V, U) = if hide then skipI2 (imp, I.Null, V, U) else (I.Null, V, U)
-	val Vfmt = fmtExp (G, 0, noCtxt, (V, I.id))
+	val Vfmt = fmtExp ([], G, 0, noCtxt, (V, I.id))
 	(* val _ = Names.varReset () *)
-	val Ufmt = fmtExp (G, 0, noCtxt, (U, I.id))
+	val Ufmt = fmtExp ([], G, 0, noCtxt, (U, I.id))
       in
 	F.HVbox [fmtConstPath (Symbol.def, qid), F.Space, sym ":", F.Break,
 			 Vfmt, F.Break,
@@ -791,9 +825,9 @@ local
         val qid = Names.conDecQid condec
 	val _ = Names.varReset IntSyn.Null
 	val (G, V, U) = if hide then skipI2 (imp, I.Null, V, U) else (I.Null, V, U)
-	val Vfmt = fmtExp (G, 0, noCtxt, (V, I.id))
+	val Vfmt = fmtExp ([], G, 0, noCtxt, (V, I.id))
 	(* val _ = Names.varReset () *)
-	val Ufmt = fmtExp (G, 0, noCtxt, (U, I.id))
+	val Ufmt = fmtExp ([], G, 0, noCtxt, (U, I.id))
       in
 	F.HVbox [fmtConstPath (Symbol.def, qid), F.Space, sym ":", F.Break,
 			 Vfmt, F.Break,
@@ -813,17 +847,19 @@ local
         let
           val G' = Names.ctxLUName G
         in
-          [F.HVbox [fmtExp (G', 0, noCtxt, (U1, I.id)),
+          [F.HVbox [fmtExp ([], G', 0, noCtxt, (U1, I.id)),
 	            F.Break, sym "=", F.Space,
-	            fmtExp (G', 0, noCtxt, (U2, I.id))]]
+	            fmtExp ([], G', 0, noCtxt, (U2, I.id))]]
         end
+    | fmtCnstr (I.EqnB (Gglobal, G, B1, B2)) = [Str "BVar Constraint"]
+
     | fmtCnstr (I.FgnCnstr (csfc as (cs, _))) =
         let
           fun fmtExpL (nil) = [Str "Empty Constraint"]
             | fmtExpL ((G, U) :: nil) =
-                [fmtExp (Names.ctxLUName G, 0, noCtxt, (U, I.id))]
+                [fmtExp ([], Names.ctxLUName G, 0, noCtxt, (U, I.id))]
             | fmtExpL ((G,U) :: expL) =
-                [fmtExp (Names.ctxLUName G, 0, noCtxt, (U, I.id)), Str ";", F.Break] @ fmtExpL expL
+                [fmtExp ([], Names.ctxLUName G, 0, noCtxt, (U, I.id)), Str ";", F.Break] @ fmtExpL expL
         in
           fmtExpL (I.FgnCnstrStd.ToInternal.apply csfc ())
         end
@@ -842,7 +878,11 @@ local
      We always raise AVars to the empty context.
   *)
   fun abstractLam (I.Null, U) = U
-    | abstractLam (I.Decl (G, I.NDec), U) = abstractLam (G, I.EClo(U, I.shift))
+    | abstractLam (I.Decl (G, I.NDec), U) = 
+                   (* G,NDec |- U : A
+		    * G |- U[invshift] : A[invShift]
+		    *)
+                    abstractLam (G, I.EClo(U, I.invShift))
     | abstractLam (I.Decl (G, D), U) = abstractLam (G, I.Lam (D, U))
 
   fun fmtNamedEVar (U as I.EVar(_,G,_,_), name) =
@@ -850,11 +890,11 @@ local
 	val U' = abstractLam (G, U)
       in
         F.HVbox [Str0 (Symbol.evar (name)), F.Space, sym "=", F.Break,
-		 fmtExp (I.Null, 0, noCtxt, (U', I.id))]
+		 fmtExp ([], I.Null, 0, noCtxt, (U', I.id))]
       end
     | fmtNamedEVar (U, name) = (* used for proof term variables in queries *)
       F.HVbox [Str0 (Symbol.evar (name)), F.Space, sym "=", F.Break,
-	       fmtExp (I.Null, 0, noCtxt, (U, I.id))]
+	       fmtExp ([], I.Null, 0, noCtxt, (U, I.id))]
 
   fun fmtEVarInst (nil) = [Str "Empty Substitution"]
     | fmtEVarInst ((U,name)::nil) = [fmtNamedEVar (U, name)]
@@ -889,14 +929,14 @@ in
          actually applied in the scope (typically, using Names.decName)
      (b) types need not be well-formed, since they are not used
   *)
-  fun formatDec (G, D) = fmtDec (G, 0, (D, I.id))
-  fun formatExp (G, U) = fmtExp (G, 0, noCtxt, (U, I.id))
-  fun formatSpine (G, S) = fmtSpine (G, 0, 0, (S, I.id))
+  fun formatDec (G, D) = fmtDec ([], G, 0, (D, I.id))
+  fun formatExp (G, U) = fmtExp ([], G, 0, noCtxt, (U, I.id))
+  fun formatSpine (G, S) = fmtSpine ([], G, 0, 0, (S, I.id))
   fun formatConDec (condec) = fmtConDec (false, condec)
   fun formatConDecI (condec) = fmtConDec (true, condec)
   fun formatCnstr (Cnstr) = F.Vbox0 0 1 (fmtCnstr Cnstr)
   fun formatCnstrs (cnstrL) = F.Vbox0 0 1 (fmtCnstrL cnstrL)
-  fun formatCtx (G0, G) = F.HVbox (fmtCtx (G0, G))	(* assumes G0 and G are named *)
+  fun formatCtx (G0, G) = F.HVbox (fmtCtx ([], G0, G))	(* assumes G0 and G are named *)
 
   fun decToString (G, D) = F.makestring_fmt (formatDec (G, D))
   fun expToString (G, U) = F.makestring_fmt (formatExp (G, U))
@@ -922,6 +962,11 @@ in
   fun printSgn () =
       IntSyn.sgnApp (fn (cid) => (print (F.makestring_fmt (formatConDecI (IntSyn.sgnLookup cid)));
 				  print "\n"))
+
+
+  (* ABP:  markedList indicates variables we want to print a "#" after. *)
+  fun formatExpMarked (markedList, G, U) = fmtExp (markedList, G, 0, noCtxt, (U, I.id))
+
 
 end  (* local ... *)
 

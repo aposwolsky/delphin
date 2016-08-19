@@ -7,6 +7,8 @@ sig	<o : type>
 	<imp : o -> o -> o>
 	<forall : (i -> o) -> o>;
 
+params = <i> ;
+
 fun plus : <rational> -> <rational> -> <rational> =
  fn <X> => fn <Y> => <X + Y> ;
 

@@ -215,10 +215,10 @@ type world = <E:exp#> -> <S:scheme> * <ofs E S>;
 fun inferSchemeW : world -> <exp> -> <scheme> 
  = fn W <E> => let
                   fun convW : world -> expEnv
-                             = fn W1 [<e>] e => (case (W1 e)
+                             = fn W1 <e> => (case (W1 <e>)
                                                 of (<T>, R) => <T>)
                  
-                  val G99 = {<t>} checkType (convW W) (fn [<t':tp#>]t' => <! t'>) <E> <t> (fn G' => G')
+                  val G99 = {<t>} checkType (convW W) (fn <t'#> => <! t'>) <E> <t> (fn G' => G')
 
                   fun getType : ({<t:tp#>} tpEnv) -> <scheme>
                         = fn G  => case {<t>} normalize (G \t) <! t>
@@ -237,19 +237,19 @@ fun inferTypeW : world -> <exp> -> <tp>
                end;
 
 fun extend : world -> <T':tp> -> {<x:exp#>}{<y:of x T'>}world
-           = fn W => fn <T'> => fn {<x>}{<y>} (x => (<! T'>, <!of! y>))
-                               | [<x'>]{<x>}{<y>} (x' => 
+           = fn W => fn <T'> => fn {<x>}{<y>} (<x> => (<! T'>, <!of! y>))
+                               |  {<x>}{<y>} (<x'> => 
                                                        (let
-                                                         val result = W x'
+                                                         val result = W <x'>
                                                        in
                                                          {<x>}{<y>} result
                                                        end) \x \y);
 
 fun extendScheme : world -> <S:scheme> -> {<x:exp#>}{<y:ofs x S>}world
-           = fn W => fn <S> => fn {<x>}{<y>} (x => (<S>, <y>))
-                               | [<x'>]{<x>}{<y>} (x' => 
+           = fn W => fn <S> => fn {<x>}{<y>} (<x> => (<S>, <y>))
+                               | {<x>}{<y>} (<x'> => 
                                                        (let
-                                                         val result = W x'
+                                                         val result = W <x'>
                                                        in
                                                          {<x>}{<y>} result
                                                        end) \x \y);
@@ -271,7 +271,7 @@ fun reduceScheme : <ofs E S> -> <Targ:tp> -> <Tres:tp> -> <ofs E (! (arrow Targ 
       | <ofs_polyintro (D : {t}ofs E (Tfun t))> <Targ> <Tres> =>
                                          (* D : {t}ofs E (Tfun t) *)
                                          let
-                                            val Gextended = {<t:tp>} reduceScheme' (fn [<T':tp#>]T' => <! T'>) <Tfun t> <Targ> <Tres>
+                                            val Gextended = {<t:tp>} reduceScheme' (fn <T'#> => <! T'>) <Tfun t> <Targ> <Tres>
 
 		 		            fun getType : ({<t:tp#>} tpEnv) -> <tp>
                         			= fn G  => case {<t>} normalize (G \t) <! t>
@@ -285,7 +285,7 @@ fun reduceScheme : <ofs E S> -> <Targ:tp> -> <Tres:tp> -> <ofs E (! (arrow Targ 
 
       | <D : ofs E (forall [t] (Tfun t))> <Targ> <Tres> =>
                                          let
-                                            val Gextended = {<t:tp>} reduceScheme' (fn [<T':tp#>]T' => <! T'>) <Tfun t> <Targ> <Tres>
+                                            val Gextended = {<t:tp>} reduceScheme' (fn <T'#> => <! T'>) <Tfun t> <Targ> <Tres>
 
 		 		            fun getType : ({<t:tp#>} tpEnv) -> <tp>
                         			= fn G  => case {<t>} normalize (G \t) <! t>
@@ -301,13 +301,13 @@ fun reduceScheme : <ofs E S> -> <Targ:tp> -> <Tres:tp> -> <ofs E (! (arrow Targ 
 
 
 fun calcOfs : world -> <E:exp> -> <S:scheme> -> <ofs E S> =
-      fn W [<x#>]<x> <S> => 
+      fn W <x#> <S> => 
 			  let 
                                fun paramCase : world -> <S:scheme> -> <E:exp#> -> <ofs E S> =
-			            fn W <S> [<x#>] x => (case (W x) 
+			            fn W <S> <x#> => (case (W <x>) 
 				                         of (<S>, <D>) => <D>)
                           in
-				paramCase W <S> x
+				paramCase W <S> <x>
                           end
 
        | W <E> <forall T> => (case {<t:tp#>} calcOfs W <E> <T t>
@@ -321,13 +321,13 @@ fun calcOfs : world -> <E:exp> -> <S:scheme> -> <ofs E S> =
 
 
 and calcOf : world -> <E:exp> -> <T:tp> -> <of E T> =
-      fn W [<x#>]<x> <T> => 
+      fn W <x#> <T> => 
 			  let 
                                 fun paramCase : world -> <T:tp> -> <E:exp#> -> <of E T> =
-			            fn W <T> [<x#>] x => (case (W x) 
+			            fn W <T> <x#> => (case (W <x>) 
 				                         of (<! T>, <!of! D>) => <D>)
                           in
-				paramCase W <T> x
+				paramCase W <T> <x>
                           end
 
        | W <z> <nat> => <tp_z>

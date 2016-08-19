@@ -21,7 +21,8 @@ fun comp  : <rational> -> <rational> -> <rational>
       = fn <x> => fn <y> => add (<10 * x>) <y> ;
 
 
-fun number : <string> -> <rational> =
+fun number : <string> -> <rational> = fn _ => <0>;
+(* Non-strict occurrences of S below
       fn <"">      => <0>
       | <S ++ "0"> => comp (number <S>) <0>
       | <S ++ "1"> => comp (number <S>) <1>
@@ -33,6 +34,7 @@ fun number : <string> -> <rational> =
       | <S ++ "7"> => comp (number <S>) <7> 
       | <S ++ "8"> => comp (number <S>) <8>
       | <S ++ "9"> => comp (number <S>) <9> ;
+*)
 
 val x : <rational>
   = number <"202"> ;	

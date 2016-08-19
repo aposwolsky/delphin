@@ -101,10 +101,11 @@ functor UnifyDelphin (structure Trail : TRAIL
               Trail.log (globalTrail, InstantiateE (refE))
             )
 
-	fun instantiateBVarLF (refB, B) =
+	fun instantiateBVarLF (refB, B, cnstrL) =
             (
               refB := SOME(B);
-              Trail.log (globalTrail, InstantiateBLF (refB))
+              Trail.log (globalTrail, InstantiateBLF (refB));
+	      awakenCnstrs := cnstrL @ !awakenCnstrs
             )
 
 	fun instantiateBVarMeta (refB, B) =
@@ -121,7 +122,7 @@ functor UnifyDelphin (structure Trail : TRAIL
           let
 	    fun countShifts (D.id) = 0
 	      | countShifts (D.Shift t) = 1 + (countShifts t)
-	      | countShifts _ = raise Error "Delphin Unification Failed:  Non-Shift Substitution"
+	      | countShifts _ = raise Error "Delphin Unification Failed:  Non-Shift Substitution" 
 	  in 
 	    if (D.isId t) then 0 else (countShifts t)
 	  end
@@ -171,8 +172,22 @@ functor UnifyDelphin (structure Trail : TRAIL
       fun applyInv2Formula (b, Gglobal, G, F, ss, rOccur) = applyInv2FormulaN (b, Gglobal, G, D.whnfF F, ss, rOccur)
       and applyInv2FormulaN (_, Gglobal, G, D.Top, ss, rOccur) = D.Top
 
-	| applyInv2FormulaN (b, Gglobal, G, D.All(visible, W, D, F), ss, rOccur) = D.All(visible, W, applyInv2NormalDec(b, Gglobal, G, D, ss, rOccur),
-							      applyInv2Formula(b, Gglobal, I.Decl(G, D.coerceDec (D.InstantiableDec D)), F, I.dot1 ss, rOccur))
+	| applyInv2FormulaN (b, Gglobal, G, D.All(Ds, F), ss, rOccur) = 
+	              let
+			fun applyInv2Decs ([], G, t) = ([], G, t)
+			  | applyInv2Decs ((visibility, D) :: Ds, G, t) = 
+			    let
+			      val D' = applyInv2NormalDec(b, Gglobal, G, D, t, rOccur)
+			      val (Ds', G', t') = applyInv2Decs (Ds, I.Decl(G, D.coerceDec (D.InstantiableDec D)), I.dot1 t)
+			    in
+			      ((visibility, D') :: Ds', G', t')
+			    end
+			val (Ds', G', ss') = applyInv2Decs (Ds, G, ss)
+		      in	   
+			D.All(Ds',
+			      applyInv2Formula(b, Gglobal, G', F, ss', rOccur))
+		      end
+
 
 	| applyInv2FormulaN (b, Gglobal, G, D.Exists(D, F), ss, rOccur) = D.Exists(applyInv2NormalDec(b, Gglobal, G, D, ss, rOccur),
 							      applyInv2Formula(b, Gglobal, I.Decl(G, D.coerceDec (D.InstantiableDec D)), F, I.dot1 ss, rOccur))
@@ -279,14 +294,14 @@ functor UnifyDelphin (structure Trail : TRAIL
 
       and applyInv2NormalDec (b, Gglobal, G, D.NormalDec (sLO, T), ss, rOccur) = D.NormalDec (sLO, applyInv2Types(b, Gglobal, G, T, ss, rOccur))
 	
-      and applyInv2NewDec (b, Gglobal, G, D.NewDecLF (sO, A), ss, rOccur) = D.NewDecLF(sO, LFapplyInv2Exp(b,Gglobal,G,A,ss))
-	| applyInv2NewDec (b, Gglobal, G, D.NewDecMeta (sO, F), ss, rOccur) = D.NewDecMeta(sO, applyInv2Formula(b,Gglobal,G,F,ss,rOccur))
+      and applyInv2NewDec (b, Gglobal, G, D.NewDecLF (sO, A), ss, rOccur) = D.NewDecLF(sO, LFapplyInv2Exp(b, Gglobal,G,A,ss))
+	| applyInv2NewDec (b, Gglobal, G, D.NewDecWorld (sO, W), ss, rOccur) = D.NewDecWorld(sO, W)
 	
       and applyInv2FormulaList(b,Gglobal, G, [], ss, rOccur) = []
 	| applyInv2FormulaList(b,Gglobal, G, F::fs, ss, rOccur) = applyInv2Formula(b,Gglobal,G,F,ss,rOccur) :: applyInv2FormulaList(b,Gglobal,G,fs,ss,rOccur)
 	
-      and applyInv2Types (b, Gglobal, G, D.LF (isP, A), ss, rOccur) = D.LF(isP, LFapplyInv2Exp(b,Gglobal,G,A,ss))
-	| applyInv2Types (b, Gglobal, G, D.Meta (isP, F), ss, rOccur) = D.Meta(isP, applyInv2Formula(b,Gglobal,G,F,ss,rOccur))
+      and applyInv2Types (b, Gglobal, G, D.LF (isP, A), ss, rOccur) = D.LF(isP, LFapplyInv2Exp(b, Gglobal,G,A,ss))
+	| applyInv2Types (b, Gglobal, G, D.Meta (F), ss, rOccur) = D.Meta(applyInv2Formula(b,Gglobal,G,F,ss,rOccur))
 	
 
       (* ************************************************************************************************* *)
@@ -295,7 +310,7 @@ functor UnifyDelphin (structure Trail : TRAIL
       (* G is the DOMAIN of ss *)
       fun applyInv2Exp(Gglobal, G, E, ss, rOccur) = (applyInv2ExpN(Gglobal, G, D.whnfE E, ss , rOccur)
 					    handle D.SubstFailed => raise Error "Delphin Unification Failed:  Application to Inverted Substitution failed")
-      and applyInv2ExpN (Gglobal, G, D.Var B, ss, rOccur) = (D.EClo(D.Var B, ss) 
+      and applyInv2ExpN (Gglobal, G, D.Var B, ss, rOccur) = D.whnfE(D.EClo(D.Var B, ss) 
                       handle D.SubstFailed => raise Error "Delphin Unification Failed:  Application to Inverted Substitution failed")
 	| applyInv2ExpN (Gglobal, G, D.Quote M, ss, rOccur) = D.Quote (LFapplyInv2Exp(true, Gglobal, G, M, D.coerceSub ss))
 	| applyInv2ExpN (Gglobal, G, D.Unit, ss, rOccur) = D.Unit
@@ -305,10 +320,11 @@ functor UnifyDelphin (structure Trail : TRAIL
 			       fileInfo)
 	| applyInv2ExpN (Gglobal, G, D.New (D, E, fileInfo), ss, rOccur) = 
 			D.New (applyInv2NewDec(true, Gglobal, G, D, D.coerceSub ss, ref NONE),
-			       applyInv2Exp(Gglobal, I.Decl(G,D.coerceDec(D.NonInstantiableDec D)), E, D.dot1 ss, rOccur), fileInfo)
-	| applyInv2ExpN (Gglobal, G, D.App (visible, E1, E2), ss, rOccur) =
-			D.App (visible, applyInv2Exp(Gglobal, G, E1, ss, rOccur),
-			       applyInv2Exp(Gglobal, G, E2, ss, rOccur))
+			       applyInv2Exp(Gglobal, I.Decl(G,D.coerceDec(D.NonInstantiableDec D)), E, D.dot1 (ss, fileInfo), rOccur), fileInfo)
+	| applyInv2ExpN (Gglobal, G, D.App (E1, args), ss, rOccur) =
+			D.App (applyInv2Exp(Gglobal, G, E1, ss, rOccur),
+			       map (fn (visible, fileInfo, E2) => (visible, fileInfo, applyInv2Exp(Gglobal, G, E2, ss, rOccur))) args)
+
 	| applyInv2ExpN (Gglobal, G, D.Pair (E1, E2, F), ss, rOccur) =
 			D.Pair (applyInv2Exp(Gglobal, G, E1, ss, rOccur),
 				applyInv2Exp(Gglobal, G, E2, ss, rOccur),
@@ -317,19 +333,20 @@ functor UnifyDelphin (structure Trail : TRAIL
 		      | applyInv2ExpN (Gglobal, G, D.ExpList Elist, ss, rOccur) = D.ExpList(map (fn E => applyInv2Exp(Gglobal, G, E, ss, rOccur)) Elist)
 	| applyInv2ExpN (Gglobal, G, D.Proj (E, i), ss, rOccur) =
 			D.Proj (applyInv2Exp(Gglobal, G, E, ss, rOccur),i)
-	| applyInv2ExpN (Gglobal, G, D.Pop(i, E), ss, rOccur) =
+	| applyInv2ExpN (Gglobal, G, D.Pop(i, E, fileInfo), ss, rOccur) =
 			let
 			  val (j, t') = D.popSub(i, ss)
 			  (* G',j..1 |- ss : G,i..1 By Assumption*)
 			  (* G' |- t' : G *)
-			  val E' = applyInv2Exp(Gglobal, D.popCtx(i, G), E, t', rOccur)
+			  val E' = applyInv2Exp(Gglobal, D.popCtxLF(i, G), E, t', rOccur)
 			in
-			  D.Pop(j, E')
+			  D.Pop(j, E', fileInfo)
 			end
 
 	| applyInv2ExpN (Gglobal, G, D.Fix (D, E), ss, rOccur) =
 			D.Fix (applyInv2NormalDec(true, Gglobal, G, D, D.coerceSub ss, ref NONE),
-			       applyInv2Exp(Gglobal, I.Decl(G,D.coerceDec (D.InstantiableDec D)), E, D.dot1 ss, rOccur))
+			       applyInv2Exp(Gglobal, I.Decl(G,D.coerceDec (D.InstantiableDec D)), E, D.dot1 (ss, NONE), rOccur))
+
 
 	| applyInv2ExpN (Gglobal, G, D.EVar ((r,F), t), ss, rOccur) =
 			if (r = rOccur) then
@@ -350,56 +367,30 @@ functor UnifyDelphin (structure Trail : TRAIL
 	| applyInv2MetaSub(Gglobal, I.Null, D.Shift t1, _, rOccur) = raise Domain (* invariant broken *)
 
       
-      and applyInv2Case(Gglobal, G, D.Eps(D,C), ss, rOccur) = D.Eps (applyInv2NormalDec(true, Gglobal, G, D, D.coerceSub ss, ref NONE),
+      and applyInv2Case(Gglobal, G, D.Eps(D,C,fileInfo), ss, rOccur) = D.Eps (applyInv2NormalDec(true, Gglobal, G, D, D.coerceSub ss, ref NONE),
 						       applyInv2Case(Gglobal, I.Decl(G,D.coerceDec (D.InstantiableDec D)), C, 
-								  D.dot1 ss, rOccur))
+								  D.dot1 (ss, fileInfo), rOccur), fileInfo)
 	| applyInv2Case(Gglobal, G, D.NewC(D,C, fileInfo), ss, rOccur) = D.NewC (applyInv2NewDec(true, Gglobal, G, D, D.coerceSub ss, ref NONE),
 						       applyInv2Case(Gglobal, I.Decl(G,D.coerceDec (D.NonInstantiableDec D)), C,
-								  D.dot1 ss, rOccur), fileInfo)
+								  D.dot1 (ss, fileInfo), rOccur), fileInfo)
 	| applyInv2Case(Gglobal, G, D.PopC(i,C), ss, rOccur) = 
 	                let
 			  val (j, t') = D.popSub(i, ss)
 			  (* G',j..1 |- ss : G,i..1 By Assumption*)
 			  (* G' |- t' : G *)
-			  val C' = applyInv2Case(Gglobal, D.popCtx(i, G), C, t', rOccur)
+			  val C' = applyInv2Case(Gglobal, D.popCtxLF(i, G), C, t', rOccur)
 			in
 			  D.PopC(j, C')
 			end
 
-	| applyInv2Case(Gglobal, G, D.Match(visible, E1,E2), ss, rOccur) = D.Match (visible, applyInv2Exp(Gglobal, G, E1, ss, rOccur),
-							     applyInv2Exp(Gglobal, G, E2, ss, rOccur))
-	| applyInv2Case(Gglobal, G, D.MatchAnd(visible, E1,C), ss, rOccur) = D.MatchAnd (visible, applyInv2Exp(Gglobal, G, E1, ss, rOccur),
-								  applyInv2Case(Gglobal, G, C, ss, rOccur))
+	| applyInv2Case(Gglobal, G, D.Match(pats,E2), ss, rOccur) = D.Match (map (fn (visible, E1) => (visible, applyInv2Exp(Gglobal, G, E1, ss, rOccur))) pats,
+									     applyInv2Exp(Gglobal, G, E2, ss, rOccur))
 
       (* ************************************************************************************************* *)
       (* ************************************************************************************************* *)
 
-      (* REMOVED.. not needed	 
-        (* If T is a type,
-         * and we want a new type T', such that T'[s] = T (for any s)
-	 * then generalizeType returns such a T'
-	 * We need this because we do not have type variables.. just formula variables.
-	 *)
-      fun generalizeType(G, D.Meta(isP, _)) = D.Meta(isP, D.newFVar(G))
-	| generalizeType(G, D.LF(isP, V)) = 
-	                let
-			  val (A', _ (* Type *)) = Approx.classToApx V
-			  val V' = Approx.apxToClass(G, A', Approx.Type, false)
-			in
-			  D.LF(isP, V')
-			end
 
-      fun generalizeNormalDec(G, D.NormalDec (sLO, T)) = D.NormalDec (sLO, generalizeType (G, T))
-      fun generalizeNewDec (G, D.NewDecLF (sO, V)) =
-	                let
-			  val (A', _ (* Type *)) = Approx.classToApx V
-			  val V' = Approx.apxToClass(G, A', Approx.Type, false)
-			in
-			  D.NewDecLF (sO, V')
-			end
-	| generalizeNewDec (G, D.NewDecMeta (sO, F)) = D.NewDecMeta(sO, D.newFVar(G))
-       *)
-
+				
       fun unifyVisibility (D.Visible, D.Visible) = ()
 	| unifyVisibility (D.Implicit, D.Implicit) = ()
 	(* Not needed
@@ -425,8 +416,8 @@ functor UnifyDelphin (structure Trail : TRAIL
       fun unifyTypes (Gglobal, G, D.LF (P1, A1), D.LF (P2, A2)) =
                    (unifyParam(P1, P2) ; (U.unifyG (Gglobal, G, (A1, I.id), (A2, I.id))
                                   handle U.Unify s => raise Error ("Delphin Unification Failed: " ^ s )))
-	| unifyTypes (Gglobal, G, D.Meta (P1, F1), D.Meta (P2, F2)) =
-		   (unifyParam(P1, P2) ; unifyFormula(Gglobal, G, F1, F2))
+	| unifyTypes (Gglobal, G, D.Meta (F1), D.Meta (F2)) =
+		   (unifyFormula(Gglobal, G, F1, F2))
 	| unifyTypes _ = raise Error ("Delphin Unification Failed:  Incompatible Types (LF vs Meta)")
 
       and unifyTypeList (Gglobal, G, [], []) = ()
@@ -436,10 +427,23 @@ functor UnifyDelphin (structure Trail : TRAIL
       and unifyFormula (Gglobal, G, F1, F2) = unifyFormulaN (Gglobal, G, D.whnfF F1, D.whnfF F2)
       (* unifyFormulaN does not have any top-level instantiated FVars *)
       and unifyFormulaN (Gglobal, G, D.Top, D.Top) = ()
-	| unifyFormulaN (Gglobal, G, D.All (visible1, W1, D1, F1), D.All (visible2, W2, D2, F2)) = 
-	                                                     (unifyVisibility(visible1, visible2) ;
-							      unifyNormalDec(Gglobal, G, D1,D2) ; 
-							       unifyFormula(Gglobal, I.Decl(G, D.coerceDec (D.InstantiableDec D1)), F1, F2))
+	| unifyFormulaN (Gglobal, G, D.All (D1s, F1), D.All (D2s, F2)) = 
+	              let
+			fun unifyDecs ([], [], G) = G
+			  | unifyDecs ((visibility1, D1) :: D1s, (visibility2, D2) :: D2s, G) = 
+			          let
+				    val _ = unifyVisibility (visibility1, visibility2)
+				    val _ = unifyNormalDec(Gglobal, G, D1, D2)
+				  in
+				    unifyDecs (D1s, D2s, I.Decl(G, D.coerceDec (D.InstantiableDec D1)))
+				  end
+			  | unifyDecs _ = raise Error ("Delphin Unification Failed:  Incompatible Decs (number of arguments)")
+
+			val G' = unifyDecs (D1s, D2s, G)
+		      in
+			 unifyFormula(Gglobal, G', F1, F2)
+		      end
+
 	| unifyFormulaN (Gglobal, G, D.Exists (D1, F1), D.Exists (D2, F2)) = (unifyNormalDec(Gglobal, G, D1,D2) ; 
 								     unifyFormula(Gglobal, I.Decl(G, D.coerceDec (D.InstantiableDec D1)), F1, F2))
 	| unifyFormulaN (Gglobal, G, D.Nabla (D1, F1), D.Nabla (D2, F2)) = (unifyNewDec(Gglobal, G, D1,D2) ; 
@@ -509,6 +513,9 @@ functor UnifyDelphin (structure Trail : TRAIL
 	| unifyFormulaN (Gglobal, G, D.FVar ((_, r, cnstrs), _), D.Top) = 
 			instantiateFVar(r, D.Top, !cnstrs)
 
+	| unifyFormulaN (Gglobal, G, D.Top, D.FVar ((_, r, cnstrs), _)) = 
+			instantiateFVar(r, D.Top, !cnstrs)
+
 	| unifyFormulaN (Gglobal, G, F1 as D.FVar ((_, r1, cnstrs), s1), F2 (* != D.Top *)) =
 		   if (W.isPatSub s1) then
 		     let
@@ -520,10 +527,18 @@ functor UnifyDelphin (structure Trail : TRAIL
 		   else
 		     addConstraint(cnstrs, ref (D.EqnF(Gglobal, G, F1, F2)))
 
+	| unifyFormulaN (Gglobal, G, F2 (* != D.Top *), F1 as D.FVar ((_, r1, cnstrs), s1) (* != D.Top *)) =
+		   if (W.isPatSub s1) then
+		     let
+		       val ss = W.invert s1
+		       val F2' = applyInv2Formula(true, Gglobal, G, F2, ss, r1)
+		     in
+		         instantiateFVar(r1, F2', !cnstrs)
+		     end
+		   else
+		     addConstraint(cnstrs, ref (D.EqnF(Gglobal, G, F1, F2)))
 
 
-	| unifyFormulaN (Gglobal, G, F1, F2 as D.FVar ((_, r2, cnstrs), s2)) =
-		     unifyFormulaN(Gglobal, G, F2, F1) (* We handle the cases when FVar is on the left above *)
 
 
 	| unifyFormulaN _ = raise Error ("Delphin Unification Failed:  Incompatible Formulas")
@@ -538,7 +553,11 @@ functor UnifyDelphin (structure Trail : TRAIL
       and unifyNewDec (Gglobal, G, D.NewDecLF (_, A1), D.NewDecLF(_, A2)) = 
                             (U.unifyG (Gglobal, G, (A1, I.id), (A2, I.id))
                                   handle U.Unify s => raise Error ("Delphin Unification Failed: " ^ s ))
-	| unifyNewDec (Gglobal, G, D.NewDecMeta (_, F1), D.NewDecMeta (_, F2)) = unifyFormula(Gglobal, G, F1, F2)
+	| unifyNewDec (Gglobal, G, D.NewDecWorld (_, W1), D.NewDecWorld (_, W2)) = 
+			          if WorldSubsumption.worldSubsume (W1, W2) andalso WorldSubsumption.worldSubsume (W2, W1)
+				    then ()
+				  else raise Error ("Delphin Unification Failed:  Incompatible Worlds (not equal)")
+
 	| unifyNewDec (Gglobal, G, _, _) = raise Error "Delphin Unificatin Failed:  Incompatible New Decs"
 
     
@@ -548,15 +567,23 @@ functor UnifyDelphin (structure Trail : TRAIL
 	| unifyExpList _ = raise Error "Delphin Unification Failed:  Incompatible Expression Lists"
 
 
-      and unifyCase(Gglobal, G, D.Eps(D1, C1), D.Eps(D2, C2)) = (unifyNormalDec(Gglobal, G, D1, D2); unifyCase(Gglobal, I.Decl(G, D.coerceDec (D.InstantiableDec D1)), C1, C2))
+      and unifyCase(Gglobal, G, D.Eps(D1, C1, fileInfo1), D.Eps(D2, C2, fileInfo2)) = (unifyNormalDec(Gglobal, G, D1, D2); unifyCase(Gglobal, I.Decl(G, D.coerceDec (D.InstantiableDec D1)), C1, C2))
 	| unifyCase(Gglobal, G, D.NewC(D1, C1, fileInfo1), D.NewC(D2, C2, fileInfo2)) = (unifyNewDec(Gglobal, G, D1, D2); unifyCase(Gglobal, I.Decl(G, D.coerceDec (D.NonInstantiableDec D1)), C1, C2))
 	| unifyCase(Gglobal, G, D.PopC(i, C1), D.PopC(j, C2)) = 
 	                                            if (i=j) then
-				                    unifyCase (Gglobal, D.popCtx(i, G), C1, C2)
+				                    unifyCase (Gglobal, D.popCtxLF(i, G), C1, C2)
 						    else raise Error "Delphin Unificatin Failed:  Different Variable Access in Pop"
-	| unifyCase(Gglobal, G, D.Match(visible1, E1a, E1b), D.Match(visible2, E2a, E2b)) = (unifyVisibility(visible1, visible2) ; unifyExp(Gglobal, G, E1a, E2a); unifyExp(Gglobal, G, E1b, E2b))
-	| unifyCase(Gglobal, G, D.MatchAnd(visible1, E1a, E1b), D.MatchAnd(visible2, E2a, E2b)) = (unifyVisibility(visible1, visible2) ; 
-											  unifyExp(Gglobal, G, E1a, E2a); unifyCase(Gglobal, G, E1b, E2b))
+	| unifyCase(Gglobal, G, D.Match(patsA, E1b), D.Match(patsB, E2b)) = 
+			let
+			  fun unifyExps ((visible1, E1a)::patsA, (visible2, E2a)::patsB) = (unifyVisibility(visible1, visible2);
+											    unifyExp(Gglobal, G, E1a, E2a);
+											    unifyExps(patsA, patsB))
+			    | unifyExps ([], []) = ()
+			    | unifyExps _ = raise Error ("Delphin Unification Failed:  Incompatible Decs (number of arguments)")
+			in
+			  (unifyExps(patsA, patsB) ;  unifyExp(Gglobal, G, E1b, E2b))
+			end
+
 	| unifyCase _ = raise Error "Delphin Unification Failed:  Incompatible Case Statements"
 
 
@@ -567,8 +594,10 @@ functor UnifyDelphin (structure Trail : TRAIL
 
       (* Precondition:  In whnf.. which is also guaranteed by whnfE. *)
       and unifyBVarsN(Gglobal, G, D.Fixed i, D.Fixed j) = if (i=j) then () else raise Error "Delphin Unification Failed:  Variable Clash"
+
+	(* removed BVarMeta
 	| unifyBVarsN(Gglobal, G, D.BVarMeta ((r, F'), s), D.Fixed k) = raise Domain (* do not handle meta-level parameters yet... *)
-	(*
+	  (*
 	       let
 		 val F = case (I.ctxLookup(mergeCtx(Gglobal, G), k))
 		         of D.Meta(_, F) => F
@@ -580,104 +609,43 @@ functor UnifyDelphin (structure Trail : TRAIL
 		    of (SOME k') => instantiateBVarMeta(r, D.Fixed k')
 		     | _ => raise Error "Bound variable (parameter) clash")
 	       end
-	   *)
-	       
-	| unifyBVarsN(Gglobal, G, D.BVarLF ((r, A', list), s), D.Fixed k) = 
-	       let
-		 val A = case (I.ctxLookup(G, k))
-		         of I.Dec(_, A) => A
-			  | _ => raise Domain
-
-		 val _ = (U.unifyG (Gglobal, G, (A, I.Shift k), (A', s))
-                                  handle U.Unify s => raise Error ("Delphin Unification Failed: " ^ s ))
-
-		 fun varExists m = if (List.exists (fn x => x = m) list)
-                             then ()
-			     else raise Error "Variable Clash (parameter status)"
-
-	       in
-		 (case (Whnf.findIndex(k, s))
-		    of (SOME k') => (varExists k' ; instantiateBVarLF(r, I.Fixed k'))
-		     | _ => raise Error "Bound variable (parameter) clash")
-	       end
-
-	| unifyBVarsN(Gglobal, G, B1 as D.Fixed i, B2 as D.BVarMeta _) = unifyBVarsN(Gglobal, G, B2, B1)
-	| unifyBVarsN(Gglobal, G, B1 as D.Fixed k, B2 as D.BVarLF _) = unifyBVarsN (Gglobal, G, B2, B1)
+	    *)
+        
+	| unifyBVarsN(Gglobal, G, D.Fixed k, D.BVarMeta ((r, F'), s)) = raise Domain (* do not handle meta-level parameters yet... *)
 
 	| unifyBVarsN(Gglobal, G, D.BVarMeta ((r1, F1), s1), D.BVarMeta ((r2, F2), s2)) = raise Domain (*  raise Error "ONLY support Matching for now..." *)
 
-	| unifyBVarsN(Gglobal, G, B1 as D.BVarLF ((rA, typeA, listA), sA), B2 as D.BVarLF ((rB, typeB, listB), sB)) = (* rA and rB are both ref NONE *)
-		    (* NOTE:  I did NOT add a constraint because I do not think it will occur *)
+	*)
+	       
+	| unifyBVarsN(Gglobal, G, D.BVarLF ((r, A', list,cnstrs), s), D.Fixed k) = 
+	       let
+		 val B = I.BVarVar ((r, A', list, cnstrs), s)
+	       in
+		 U.unifyG (Gglobal, G, (I.Root(I.BVar B, I.Nil), I.id), (I.Root(I.BVar (I.Fixed k), I.Nil), I.id))
+		    handle U.Unify s => raise Error ("Delphin Unification Failed: " ^ s )
+	       end
+
+	| unifyBVarsN(Gglobal, G, D.Fixed k, D.BVarLF ((r, A', list,cnstrs), s)) = 
+	       let
+		 val B = I.BVarVar ((r, A', list, cnstrs), s)
+	       in
+		 U.unifyG (Gglobal, G, (I.Root(I.BVar B, I.Nil), I.id), (I.Root(I.BVar (I.Fixed k), I.Nil), I.id))
+		    handle U.Unify s => raise Error ("Delphin Unification Failed: " ^ s )
+	       end
+	     
+
+	| unifyBVarsN(Gglobal, G, B1 as D.BVarLF ((rA, typeA, listA, cnstrsA), sA), B2 as D.BVarLF ((rB, typeB, listB, cnstrsB), sB)) = (* rA and rB are both ref NONE *)
 		    let
-
-		      val _ = (U.unifyG (Gglobal, G, (typeA, sA), (typeB, sB))
-                                  handle U.Unify s => raise Error ("Delphin Unification Failed: " ^ s ))
-
-		      (* NOT SURE ABOUT THIS ANYMORE.. - ABP 
-		      (* rA[sA] = rB[sB] *)
-		      (* However, as rA must an index (and always substituted with an index?)
-		       * we can throw out everything in sA (and sB) which is not an index.
-		       *)
-		      
-	              (* WARNING:  If "idx k" changes to "idx B" then we need to do occurs checks *)
-		      fun throwOut(I.Shift i) = I.Shift i
-			| throwOut(I.Dot (I.Idx k, t)) = I.Dot(I.Idx k, throwOut t)
-			| throwOut(I.Dot (I.Exp U, t)) = 
-			      (* this may be unnecessary.. it should be an Idx *)
-			    	   let 
-				     val nOpt = SOME(Whnf.etaContract U)
-				       handle Whnf.Eta => NONE
-				   in
-				     case nOpt
-				       of (SOME n') => I.Dot (I.Idx n', throwOut t)
-					| _ => I.Dot (I.Undef, throwOut t)
-				   end
-			| throwOut(I.Dot (_, t)) = I.Dot (I.Undef, throwOut t)
-
-		      val sA = throwOut sA
-		      val sB = throwOut sB
-			*)
+		      val B1LF = I.BVarVar((rA, typeA, listA, cnstrsA), sA)
+		      val B2LF = I.BVarVar((rB, typeB, listB, cnstrsB), sB)
 		    in
-		      if (rA = rB) then
-			if Whnf.isPatSub(sA) then
-			  if Whnf.isPatSub(sB) then
-			    let
-			      val s' = U.intersection(sA, sB)
-			    in
-			      if Whnf.isId s' then ()
-				(* G1 |- rA : typeA
-				 * G |- sA : G1
-				 * G |- sB : G1
-				 * 
-				 * G |- s' : Gnew
-				 * Gnew |- sA o (s' Inverse) : G1 
-				 *)
-			      else 
-				(* 
-				let
-				  val ss' = Whnf.invert s'
-				  val typeA' = LFapplyInv2Exp (true, Gglobal, G, (I.EClo(typeA, sA)), ss')
-				in
-			          instantiateBVarLF(rA, I.BVarVar((ref NONE, typeA'), s'))
-				end
-				 *)
-				raise Error "Bound variable ambiguity (we need to finish this case)"
-
-			    end
-			  else raise Error "Bound variable ambiguity (we need to add constraints)"
-			else raise Error "Bound variable ambiguity (we need to add constraints)"
-		      else
-			if Whnf.isPatSub(sA) then
-			      let val (B2', _(* id *)) = Whnf.whnfBVar (I.BVarVar((rB, typeB, listB),sB), Whnf.invert sA) in (instantiateBVarLF(rA, B2')) end
-			else if Whnf.isPatSub(sB) then
-			      let val (B1', _(* id *)) = Whnf.whnfBVar (I.BVarVar((rA, typeA, listA), sA), Whnf.invert sB) in (instantiateBVarLF(rB, B1')) end
-			else
-			  raise Error "Bound variable ambiguity (we need to add constraints)"			    
+		      U.unifyG (Gglobal, G, (I.Root(I.BVar B1LF, I.Nil), I.id), (I.Root(I.BVar B2LF, I.Nil), I.id))
+		        handle U.Unify s => raise Error ("Delphin Unification Failed: " ^ s )
 		    end
 
-
+	(*
 	| unifyBVarsN _ = raise Error "Delphin Unification Failed:  BVars Clash"
-	
+	  *)
 
       and  unifyExp (Gglobal, G, E1, E2) = (unifyExpN (Gglobal, G, D.whnfE E1, D.whnfE E2)
 				   handle D.SubstFailed => raise Error "Delphin Unification Failed:  UNEXPECTED Failure of whnf")
@@ -688,13 +656,13 @@ functor UnifyDelphin (structure Trail : TRAIL
 	 * so we need to check if it is equal to what is on the LF level *)
 	| unifyExpN (Gglobal, G, D.Var (B1, fileInfo1), E2 as D.Quote _) = 
 	      (case (D.coerceBoundVar B1)
-		 of NONE => raise Error "Delphin Unification Failed:  Incompatible Var"
-		  | SOME U1 => unifyExp(Gglobal, G, D.Quote U1, E2))
+		 of(* NONE => raise Error "Delphin Unification Failed:  Incompatible Var"
+		  | SOME *) U1 => unifyExp(Gglobal, G, D.Quote U1, E2))
 
 	| unifyExpN (Gglobal, G, E1 as D.Quote _, D.Var (B1, fileInfo1)) = 
 	      (case (D.coerceBoundVar B1)
-		 of NONE => raise Error "Delphin Unification Failed:  Incompatible Var"
-		  | SOME U1 => unifyExp(Gglobal, G, E1, D.Quote U1))
+		 of (* NONE => raise Error "Delphin Unification Failed:  Incompatible Var"
+		  | SOME *) U1 => unifyExp(Gglobal, G, E1, D.Quote U1))
 
 	| unifyExpN (Gglobal, G, D.Quote M1, D.Quote M2) = (U.unifyG (Gglobal, G, (M1, I.id), (M2, I.id))
                                   handle U.Unify s => raise Error ("Delphin Unification Failed: " ^ s ))
@@ -704,8 +672,20 @@ functor UnifyDelphin (structure Trail : TRAIL
 
 	| unifyExpN (Gglobal, G, D.New (D1, E1, fileInfo1), D.New (D2,E2, fileInfo2)) = (unifyNewDec(Gglobal, G, D1, D2) ;
 						       unifyExp(Gglobal, I.Decl(G, D.coerceDec(D.NonInstantiableDec D1)), E1, E2))
-	| unifyExpN (Gglobal, G, D.App (visible1, E1, E2), D.App (visible2, E1', E2')) = (unifyVisibility(visible1, visible2) ; 
-										 unifyExp(Gglobal, G, E1, E1') ; unifyExp(Gglobal, G, E2, E2'))
+	| unifyExpN (Gglobal, G, D.App (E1, args1), D.App (E1', args2)) = 
+		 let
+		   val _ = unifyExp(Gglobal, G, E1, E1')
+		   fun unifyExps ([], []) = ()
+		     | unifyExps ((visible, fileInfo, E2)::args1, (visible', fileInfo', E2')::args2) =
+		                (unifyVisibility(visible, visible') ; 
+				 unifyExp(Gglobal, G, E2, E2') ;
+				 unifyExps (args1, args2))
+		     | unifyExps _ = raise Error "Delphin Unificatin Failed:  Different number of arguments in application"
+
+		   val _ = unifyExps (args1, args2)
+		 in
+		   ()
+		 end
 
 	| unifyExpN (Gglobal, G, D.Pair (E1, E2, F), D.Pair (E1', E2', F')) = (unifyExp(Gglobal, G, E1, E1') ; unifyExp(Gglobal, G, E2, E2') ; unifyFormula(Gglobal, G, F, F'))
 
@@ -713,19 +693,20 @@ functor UnifyDelphin (structure Trail : TRAIL
 	| unifyExpN (Gglobal, G, D.Proj (E1, i), D.Proj (E1', j)) = 
                               if (i=j) then unifyExp(Gglobal, G, E1, E1') else raise Error "Delphin Unificatin Failed:  Different Variable Access in Projection"
 
-	| unifyExpN (Gglobal, G, D.Pop(i, E1), D.Pop(j, E2)) = if (i=j) then
-				                    unifyExp (Gglobal, D.popCtx(i, G), E1, E2)
+	| unifyExpN (Gglobal, G, D.Pop(i, E1, fileInfo1), D.Pop(j, E2, fileInfo2)) = if (i=j) then
+				                    unifyExp (Gglobal, D.popCtxLF(i, G), E1, E2)
 						    else raise Error "Delphin Unificatin Failed:  Different Variable Access in Pop"
 
 	| unifyExpN (Gglobal, G, D.Fix (D1, E1), D.Fix (D2,E2)) = (unifyNormalDec(Gglobal, G, D1, D2) ;
 						       unifyExp(Gglobal, I.Decl(G, D.coerceDec (D.InstantiableDec D1)), E1, E2))
+
 
 	| unifyExpN (Gglobal, G, D.EVar ((r1,F1), t1), E2 as D.EVar ((r2,F2), t2)) =
 	       let 
 		 val s1 = numShifts t1 (* Raises error if t1 is not a shift substitution *)
 		 val s2 = numShifts t2 (* Raises error if t2 is not a shift substitution *)
 	       in
-		 if (r1 = r2) then if (s1=s2) then () else raise Error "Delphin Unification Failure:  Same Meta-Level EVar under different substitution"
+		 if (r1 = r2) then if (s1=s2) then () else raise Error "Delphin Unification Failure:  Same Meta-Level EVar under different substitution"  (* Should add constraints to handle this properly!!! -- ABP *)
 		 else if (s1 > s2) then (* r2 = r1[s1-s2] *)
 		                        instantiateEVar(r2, D.EVar((r1,F1), D.shiftTo(s1-s2, D.id)))
 		      else
@@ -744,7 +725,17 @@ functor UnifyDelphin (structure Trail : TRAIL
 	       end
 
 
-	| unifyExpN (Gglobal, G, E1, D.EVar r2) = unifyExpN(Gglobal, G, D.EVar r2, E1)
+	| unifyExpN (Gglobal, G, E2, D.EVar ((r1, F1), t1)) = 
+	       let
+		 val s1 = numShifts t1 (* Raises error if t1 is not a shift substitution *)
+		 val t1Inv = invertShiftSub(s1)
+	         (* G |- t1 : G0 *)
+	         (* G0 |- t1Inv : G *)
+		 val E2' = applyInv2Exp(Gglobal, G, E2, t1Inv, r1)
+	       in
+		 instantiateEVar(r1, E2')
+	       end
+
 
 
 	| unifyExpN _ = raise Error "Delphin Unification Failed:  Expressions incompatible"
@@ -757,6 +748,9 @@ functor UnifyDelphin (structure Trail : TRAIL
 	| awakeCnstr (SOME(cnstr as ref (D.EqnF (Gglobal, G, F1, F2)))) =
           (solveConstraint cnstr;
            unifyF' (Gglobal, G, F1, F2))
+
+      and unifyE' (Gglobal, G, E1, E2) = 
+          (unifyExp (Gglobal, G, E1, E2); awakeCnstr (nextCnstr ()))
 
       and unifyF' (Gglobal, G, F1, F2) =
           (unifyFormula (Gglobal, G, F1, F2); awakeCnstr (nextCnstr ()))
@@ -773,17 +767,26 @@ functor UnifyDelphin (structure Trail : TRAIL
 	(resetAwakenCnstrs (); unifyT' (Gglobal, G, T1, T2))
 
 
-      fun unifyE (Gglobal, G, E1, E2) = unifyExp(Gglobal, G, E1, E2)	
+      fun unifyE (Gglobal, G, E1, E2) = 
+	(* E no longer has any constraints attached to it.. so we can optimize
+	 * away the cnstrs if we want...
+	 *)
+	(resetAwakenCnstrs () ; unifyE'(Gglobal, G, E1, E2))
+
       fun unifyP (P1, P2) = unifyParam(P1, P2)
 
       fun LFunifiable (Gglobal, G, A1s, A2s) = (U.unifyG (Gglobal, G, A1s, A2s) ; true) handle U.Unify msg => false
 
       val LFapplyInv2Exp = LFapplyInv2Exp
       val applyInv2Formula = applyInv2Formula
+      val applyInv2NormalDec = applyInv2NormalDec
 
       val reset = reset
       val mark = mark
       val unwind = unwind
+
+
+      val applyInv2Exp = applyInv2Exp
 
     end
 

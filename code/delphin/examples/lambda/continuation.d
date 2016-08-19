@@ -11,6 +11,8 @@ sig <exp  : type>
     <callcc : (cont -> exp) -> exp>
     <throw  : cont -> exp -> exp>;
 
+params = <cont> ;
+
 fun init : <exp> -> (<cont> -> <exp> -> <exp>) -> <exp> 
      = fn <X> L => <X> ;
 
@@ -27,7 +29,7 @@ fun eval : <exp> -> (<exp> -> (<cont> -> <exp> -> <exp>) -> <exp>) -> (<cont> ->
  ;
 
 
-fun eval' = fn <E> => eval <E> init (fn .);
+val eval' = fn <E> => eval <E> init (fn .);
  
 val eval'1 = eval' <lam [x] x>;
 val eval'2 = eval' <lam [x] app x x>;

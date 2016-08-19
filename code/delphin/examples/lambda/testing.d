@@ -9,6 +9,9 @@ sig  <bool : type>
      <true : bool>
      <false : bool>;
 
+params = <exp> ;
+
+
 fun not : <bool> -> <bool> 
  = fn <true>  => <false>
     | <false> => <true> ;
@@ -34,6 +37,8 @@ val c2  = const <[x:exp] app x x>;
 val c3  = const <[x:exp] app (lam [y:exp] y) (lam [y:exp] y)>;
 val c4  = const <[x:exp] lam [y] x>;
 	
+params = .;
+
 fun betatest : <exp> -> < bool> 
  = fn <lam F>     =>  <false>
     | <app E1 _> =>  case <E1> of <lam F>  =>  <true>

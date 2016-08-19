@@ -31,4 +31,10 @@ sig
 
   val printSgn : unit -> unit
 
+  val formatExpMarked : (int list) * IntSyn.dctx * IntSyn.Exp -> Formatter.format (* ABP:  the list indicates
+										   * variables we want to print
+										   * a "#" after..
+										   *)
+
+
 end;  (* signature PRINT *)

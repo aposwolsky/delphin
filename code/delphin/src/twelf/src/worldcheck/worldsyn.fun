@@ -442,7 +442,7 @@ struct
     fun checkSubordBlock (G, G', L) =
           checkSubordBlock' (ctxAppend (G, G'), L)
     and checkSubordBlock' (G, (D as I.Dec(_,V))::L') =
-	  ( Subordinate.respectsN (G, V); (* is V nf?  Assume here: yes! *)
+	  ( Subordinate.respectsN (V); (* is V nf?  Assume here: yes! *)
 	    checkSubordBlock' (I.Decl (G, D), L') )
       | checkSubordBlock' (G, nil) = ()
 

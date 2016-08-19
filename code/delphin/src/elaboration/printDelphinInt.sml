@@ -31,18 +31,6 @@ structure PrintDelphinInt =
     val FVarsList : (((D.Formula option) ref) * string) list ref = ref [] 
     val EVarsList : (((D.Exp option) ref) * string) list ref = ref [] 
      
-    fun LFformatExp(G, U) = Print.formatExp(D.coerceCtx G, U)
-(* EVars are now NDec free.. so we do not need to strengthen them away...
-    fun LFformatExp(G, U) =
-        let
-	  val G' = D.coerceCtx G
-	  val (G0, t) = D.strengthen G'
-	     (* G0 |- t : G'  and G0 is NDec free *)
-	in
-	  Print.formatExp(G0, I.EClo(U, t))
-	end
-*)
-
     fun varReset G =
       (EVarsList := [] ;
        FVarsList := [] ;  
@@ -93,7 +81,7 @@ structure PrintDelphinInt =
                   nameInList(name,sL) orelse ctxDefined(G, name)
       | ctxDefined (I.Decl(G, D.NonInstantiableDec (D.NewDecLF (SOME s, _))), name) =
 		 s = name orelse ctxDefined(G, name)
-      | ctxDefined (I.Decl(G, D.NonInstantiableDec (D.NewDecMeta (SOME s, _))), name) =
+      | ctxDefined (I.Decl(G, D.NonInstantiableDec (D.NewDecWorld (SOME s, _))), name) =
 		 s = name orelse ctxDefined(G, name)
       | ctxDefined (I.Decl(G, _), name) = ctxDefined(G, name)
 
@@ -116,7 +104,7 @@ structure PrintDelphinInt =
 		    else
 		      firstOccurrence (G, name, k+1)
 
-      | firstOccurrence (I.Decl(G, D.NonInstantiableDec (D.NewDecMeta (SOME s, _))), name, k) =
+      | firstOccurrence (I.Decl(G, D.NonInstantiableDec (D.NewDecWorld (SOME s, _))), name, k) =
 		    if (s = name) then k
 		    else
 		      firstOccurrence (G, name, k+1)
@@ -217,19 +205,19 @@ structure PrintDelphinInt =
                   | _ => raise Domain)
 
       (* Enhancement:  If it is just a pair with top, then get name based on first part *)
-      | getNamesFromType (false, G, D.Meta(_, D.Exists(D.NormalDec(_, D.LF(_, A)), D.Top))) =
+      | getNamesFromType (false, G, D.Meta(D.Exists(D.NormalDec(_, D.LF(_, A)), D.Top))) =
 		 (case (Names.decName (D.coerceCtx G, I.Dec (NONE, A))) 
 		 of (I.Dec (SOME s, A)) => [s]
                   | _ => raise Domain)
 
-      | getNamesFromType (true, G, D.Meta(_, D.Exists(D.NormalDec(_, D.LF(_, A)), D.Top))) =
+      | getNamesFromType (true, G, D.Meta(D.Exists(D.NormalDec(_, D.LF(_, A)), D.Top))) =
 		 (case (Names.decUName (D.coerceCtx G, I.Dec (NONE, A))) 
 		 of (I.Dec (SOME s, A)) => [s]
                   | _ => raise Domain)
 
-      | getNamesFromType (isUniversal, G, D.Meta(_, D.FormList Flist)) =
+      | getNamesFromType (isUniversal, G, D.Meta(D.FormList Flist)) =
 		    let
-		      fun getOneName F = (case getNamesFromType(isUniversal, G, D.Meta(D.Existential, F))
+		      fun getOneName F = (case getNamesFromType(isUniversal, G, D.Meta(F))
 					    of [s] => s
 					     | _ => raise Domain (* formula can't have more than one name *)
 					  )
@@ -242,6 +230,15 @@ structure PrintDelphinInt =
 		    
 
     fun normalDecName (G, D as D.NormalDec (SOME [], T)) = D.NormalDec (NONE, T) (* shouldn't ever occur *)
+      | normalDecName (G, D as D.NormalDec (SOME [name], T)) = 
+          (* If name = "@???" then it was a generated fresh name in convert.fun and should be changed 
+	   * before printing as "@" is a reserved symbol in Delphin.
+	   *)
+           if (String.isPrefix "@" name) then normalDecName(G, D.NormalDec(NONE, T))
+	   else if varDefined name orelse ctxDefined(G, name) 
+		  then D.NormalDec(SOME [getNextName(G, baseOf name)], T)
+		else D
+	       
       | normalDecName (G, D as D.NormalDec (SOME sL, T)) = 
                       let
 			fun nameList (l, []) = l
@@ -256,7 +253,7 @@ structure PrintDelphinInt =
 			D.NormalDec (SOME (nameList([], sL)), T)
 		      end			  
 			             
-                        
+
       | normalDecName (G, D.NormalDec (NONE, T)) =
 			normalDecName (G, D.NormalDec (SOME (getNamesFromType(false, G, T)), T))
 
@@ -266,13 +263,24 @@ structure PrintDelphinInt =
 
 
     fun newDecName (G, D as D.NewDecLF (SOME name, A)) = 
+          (* If name = "@???" then it was a generated fresh name in convert.fun and should be changed 
+	   * before printing as "@" is a reserved symbol in Delphin.
+	   *)
+          if (String.isPrefix "@" name) then newDecName(G, D.NewDecLF(NONE, A))
+	  else
                         if varDefined name orelse ctxDefined(G, name)
 			  then D.NewDecLF(SOME (getNextName(G, baseOf name)), A)
 			else D
 
-      | newDecName (G, D as D.NewDecMeta (SOME name, T)) =
+      | newDecName (G, D as D.NewDecWorld (SOME name, W)) =
+          (* If name = "@???" then it was a generated fresh name in convert.fun and should be changed 
+	   * before printing as "@" is a reserved symbol in Delphin.
+	   *)
+          if (String.isPrefix "@" name) then newDecName(G, D.NewDecWorld(NONE, W))
+	  else
+
                         if varDefined name orelse ctxDefined(G, name)
-			  then D.NewDecMeta(SOME (getNextName(G, baseOf name)), T)
+			  then D.NewDecWorld(SOME (getNextName(G, baseOf name)), W)
 			else D
 
       | newDecName (G, D as D.NewDecLF (NONE, A)) =
@@ -285,14 +293,11 @@ structure PrintDelphinInt =
 			    newDecName (G, D.NewDecLF (SOME s, A))
 			  end
 
-      | newDecName (G, D as D.NewDecMeta (NONE, T)) =
+      | newDecName (G, D as D.NewDecWorld (NONE, W)) =
 			  let
-			    val s = (case (getNamesFromType(true, G, D.Meta(D.Existential, T)))
-				       of [s] => s
-					| _ => raise Domain 
-			             )
+			    val s = "W"
 			  in
-			    newDecName (G, D.NewDecMeta (SOME s, T))
+			    newDecName (G, D.NewDecWorld (SOME s, W))
 			  end
 			  
 
@@ -316,8 +321,8 @@ structure PrintDelphinInt =
 	   T'
 	 end
 
-    and convert_Types' (smartInj, G, D.LF (isP, A)) = D'.LF(rDummy, convert_isParam isP, D'.ExplicitLFType (LFformatExp(G, A)))
-      | convert_Types' (smartInj, G, D.Meta (isP, F)) = D'.Meta(rDummy, convert_isParam isP, convert_Formula (smartInj, G,F))
+    and convert_Types' (smartInj, G, D.LF (isP, A)) = D'.LF(rDummy, convert_isParam isP, D'.ExplicitLF (Print.formatExp(D.coerceCtx G, A)))
+      | convert_Types' (smartInj, G, D.Meta (F)) = D'.Meta(rDummy, convert_Formula (smartInj, G,F))
 
     and convert_Formula (smartInj, G, F) = 
          let
@@ -329,15 +334,17 @@ structure PrintDelphinInt =
 	 end
 
     and convertVisibility (D.Visible) = D'.Visible
-      | convertVisibility (D.Implicit) = D'.Implicit
+      | convertVisibility (D.Implicit) = if (!Print.implicit)
+                                         then D'.Visible (* we make everything visible *)
+					 else D'.Implicit
 
     and convert_FormulaN (smartInj, G, D.Top) = D'.Top rDummy
 
-      | convert_FormulaN (smartInj, G, D.All (visible, W, D, F)) = 
+      | convert_FormulaN (smartInj, G, D.All (Ds, F)) = 
                                             let 
-					      val (D, D') = convert_NormalDec (smartInj, G, D)
+					      val (Ds, Ds', G') = convert_NormalDecs (smartInj, G, Ds)
 					    in 
-					      D'.All (rDummy, convertVisibility visible, D', convert_Formula(smartInj, I.Decl(G,D.InstantiableDec D), F))
+					      D'.All (rDummy, Ds', convert_Formula(smartInj, G', F))
 					    end
      
       | convert_FormulaN (smartInj, G, D.Exists (D, F)) = 
@@ -359,12 +366,16 @@ structure PrintDelphinInt =
 					    end
                                 )
 
-      | convert_FormulaN (smartInj, G, D.Nabla (D, F)) = 
+      | convert_FormulaN (smartInj, G, D.Nabla (D as D.NewDecLF _, F)) = 
                                             let 
 					      val (D, D') = convert_NewDec (smartInj, G, D)
 					    in 
 					      D'.Nabla (rDummy, D', convert_Formula(smartInj, I.Decl(G,D.NonInstantiableDec D), F))
 					    end
+
+      | convert_FormulaN (smartInj, G, D.Nabla (D as D.NewDecWorld _, F)) = 
+					    (* ignore NewDecWorld as the programmer is not exposed to it.. *)
+					      convert_Formula(smartInj, I.Decl(G,D.NonInstantiableDec D), F)
 
       | convert_FormulaN (smartInj, G, D.FormList _) = D'.OmittedFormula rDummy (* Do not print out ... this is a generalized pair for mutual recursion *)
 
@@ -386,15 +397,33 @@ structure PrintDelphinInt =
 				   in 
 				     (D1, D1')
 				   end
-				       
-    and convert_NewDec (smartInj, G, D)  = 
+
+    and convert_NormalDecs (smartInj, G, []) = ([], [], G)
+      | convert_NormalDecs (smartInj, G, (vis, D)::Ds) = 
+                   let
+		     val vis' = convertVisibility vis
+		     val (D, D') = convert_NormalDec (smartInj, G, D)
+		     val (resD, resD', G') = convert_NormalDecs (smartInj, I.Decl(G, D.InstantiableDec D), Ds)
+		   in
+		     ((vis, D) :: resD, (vis', D') :: resD', G')
+		   end
+		     
+			
+    (* Precondition:  only called on NewDecLF! *)
+    and convert_NewDec (smartInj, G, D as D.NewDecLF _)  = 
                                 let 
 				  val D1 = newDecName(G, D)
 				  val D1' = convertNamed_NewDec(smartInj, G, D1)
 				in 
 				  (D1, D1')
 				end
-      
+      | convert_NewDec (smartInj, G, D as D.NewDecWorld _) = raise Domain 			     
+     
+    (* Precondition:  only called on NewDecLF! *)
+    and convertNamed_NewDec (smartInj, G, D.NewDecLF (SOME s, A)) = D'.NewDecLF (rDummy, SOME s, D'.ExplicitLF (Print.formatExp(D.coerceCtx G, A)))
+      | convertNamed_NewDec (smartInj, G, D.NewDecWorld (SOME s, W)) = raise Domain (* not available in external syntax *)
+      | convertNamed_NewDec _ = raise Domain (* should be named *)
+ 
 
     (* Assuming Dec is named in internal syntax, we convert it to external syntax *)
     (* If it is for mutual recursion then we omit printing that *)
@@ -410,10 +439,6 @@ structure PrintDelphinInt =
 
       | convertNamed_NormalDec _ = raise Domain (* not named, but should be by precondition *)
      
-    and convertNamed_NewDec (smartInj, G, D.NewDecLF (SOME s, A)) = D'.NewDecLF (rDummy, SOME s, D'.ExplicitLFType (LFformatExp(G, A)))
-      | convertNamed_NewDec (smartInj, G, D.NewDecMeta (SOME s, F)) = D'.NewDecMeta(rDummy, SOME s, convert_Formula(smartInj, G, F))
-      | convertNamed_NewDec _ = raise Domain (* should be named *)
-
 
    fun lookup (1, I.Decl (G, D.InstantiableDec (D.NormalDec (SOME [s], _)))) =
 	       SOME (s)
@@ -437,27 +462,26 @@ structure PrintDelphinInt =
      | lookupList _ = raise Domain (* badly typed *)
 
 
-
-   fun convFix (smartInj, G, G', D.NormalDec (SOME (s::sL), D.Meta(D.Existential, D.FormList (t::tL))), (E::Elist)) : (Paths.region * D'.NormalDec * D'.Exp) list =
+   fun convFix (smartInj, G, G', D.NormalDec (SOME (s::sL), D.Meta(D.FormList (t::tL))), (E::Elist)) : (Paths.region * D'.NormalDec * D'.Exp) list =
         (* converts fixpoint to external syntax *)
         (* assuming dec is properly named *)
               let
 		(* Get first dec *)
-		(* val (D, D') = convert_NormalDec (smartInj, G, D.NormalDec (SOME [s], D.Meta(D.Existential, t))) *)
-		val D = D.NormalDec (SOME [s], D.Meta(D.Existential, t))
+		(* val (D, D') = convert_NormalDec (smartInj, G, D.NormalDec (SOME [s], D.Meta(t))) *)
+		val D = D.NormalDec (SOME [s], D.Meta(t))
 		val D' = convertNamed_NormalDec (smartInj, G, D)
 		val _ = Names.mark()   (* I do not think that this scoping of Names is necessary.. but it can't hurt *)
-		val E' = convert_Exp(smartInj, G', E)
+		val E' = convert_Exp(smartInj, false (* not pattern *), G', E)
 		val thisFun = (rDummy, D', E')
 		val _ = Names.unwind() 
 	      in
-		thisFun :: (convFix(smartInj, G, G', D.NormalDec (SOME sL, D.Meta(D.Existential, D.FormList tL)), Elist))
+		thisFun :: (convFix(smartInj, G, G', D.NormalDec (SOME sL, D.Meta(D.FormList tL)), Elist))
 	      end
 
-     | convFix (smartInj, _, _, D.NormalDec (SOME [], D.Meta(D.Existential, D.FormList [])), _) = []
+     | convFix (smartInj, _, _, D.NormalDec (SOME [], D.Meta(D.FormList [])), _) = []
 
-     | convFix (smartInj, G, G', D.NormalDec (sLO, D.Meta(D.Existential, F)), Elist) = 
-	      convFix(smartInj, G, G', D.NormalDec (sLO, D.Meta(D.Existential, D.FormList [F])), Elist)
+     | convFix (smartInj, G, G', D.NormalDec (sLO, D.Meta(F)), Elist) = 
+	      convFix(smartInj, G, G', D.NormalDec (sLO, D.Meta(D.FormList [F])), Elist)
 
 	                     
 
@@ -465,18 +489,22 @@ structure PrintDelphinInt =
 
 
 
-   and convCaseBranch' (smartInj, G, D.Eps (D, C)) = 
+   and convCaseBranch' (smartInj, G, D.Eps (D, C, fileInfo)) = 
 	                 let 
 			   val (D, D') = convert_NormalDec (smartInj, G, D)
 			 in 
 			   D'.Eps (rDummy, D', convCaseBranch'(smartInj, I.Decl(G,D.InstantiableDec D), C))
 			 end
-     | convCaseBranch' (smartInj, G, D.NewC (D, C, fileInfo)) =
+     | convCaseBranch' (smartInj, G, D.NewC (D as D.NewDecLF _, C, fileInfo)) =
 	                 let 
 			   val (D, D') = convert_NewDec (smartInj, G, D)
 			 in 
 			   D'.NewC (rDummy, D', convCaseBranch'(smartInj, I.Decl(G,D.NonInstantiableDec D), C))
 			 end
+
+     | convCaseBranch' (smartInj, G, D.NewC (D as D.NewDecWorld _, C, fileInfo)) = raise Domain (* impossible.
+												 * NewC only over NewDecLF
+												 *)
 
      | convCaseBranch' (smartInj, G, D.PopC (i, C)) =
 	                  let
@@ -488,15 +516,31 @@ structure PrintDelphinInt =
 			    D'.PopC(rDummy, s, convCaseBranch' (smartInj, D.popCtx(i,G), C))
 			  end
 
+     | convCaseBranch' (smartInj, G, D.Match (pats, E2)) =
+			  let
+			    fun convertPat (D'.VarString(r, s)) = D'.PatternString(r, s)
+			      | convertPat (D'.Quote(r, A)) = D'.PatternQuote(r, A)
+			      | convertPat (D'.Unit r) = D'.PatternUnit r
+			      | convertPat (D'.Pair (r, E1, E2)) = D'.PatternPair(r, convertPat E1, convertPat E2)
+			      | convertPat (D'.New (r, D, E)) = D'.PatternNew(r, D, convertPat E)
+			      | convertPat (D'.Pop (r, s, E)) = D'.PatternPop(r, s, convertPat E)
+			      | convertPat (D'.TypeAscribe (r, E, T)) = D'.PatternAscribe (r, convertPat E, T)
+			      | convertPat _ = D'.PatternString(rDummy, "BAD_PATTERN_IN_INTERNAL_SYNTAX")
 
-     | convCaseBranch' (smartInj, G, D.Match (D.Implicit, E1, E2)) =
-			 D'.ImplicitMatch (rDummy, convert_Exp(smartInj, G, E2))
-			
-     | convCaseBranch' (smartInj, G, D.Match (D.Visible, E1, E2)) =
-			 D'.Match (rDummy, convert_Exp(smartInj, G, E1), convert_Exp(smartInj, G, E2))
 
-     | convCaseBranch' (smartInj, G, D.MatchAnd (D.Implicit, E1, C)) = convCaseBranch'(smartInj, G, C)
-     | convCaseBranch' (smartInj, G, D.MatchAnd (D.Visible, E1, C)) = D'.MatchAnd (rDummy, convert_Exp(smartInj, G, E1), convCaseBranch'(smartInj, G, C))
+			    fun convertPats [] = []
+			      | convertPats ((D.Implicit, E1)::pats) = 
+			                  if (!Print.implicit) then
+					      convertPat(convert_Exp(smartInj, true (* it is a pattern *), G, E1)) :: (convertPats pats)
+					  else
+					      convertPats pats
+
+			      | convertPats ((D.Visible, E1)::pats) = convertPat(convert_Exp(smartInj, true (* it is a pattern *), G, E1)) :: (convertPats pats)
+			  in
+			    D'.Match (false (*not sugar *), rDummy, convertPats(pats), convert_Exp(smartInj, false (* not pattern *), G, E2))
+			  end
+
+
 
    and convCaseBranch (smartInj, G, C) = 
 	         let
@@ -508,85 +552,163 @@ structure PrintDelphinInt =
 		 end
 
 
-   and convert_Exp (smartInj, G, E) = (convert_ExpW (smartInj, G, D.whnfE E)
+   and convert_Exp (smartInj, isPattern, G, E) = (convert_ExpW (smartInj, isPattern, G, D.whnfE E)
 				       handle D.SubstFailed => raise Domain )
-   and convert_ExpW (smartInj, G, D.Var (D.Fixed i, fileInfo)) =
-                           (case (lookup(i,G))
-                                  of NONE => D'.VarInt (rDummy, i) (* variable doesn't have a name *)
-				   | SOME s => D'.VarString(rDummy, varString(G, s, i)))
 
-     | convert_ExpW (smartInj, G, D.Var B) = D'.VarString(rDummy, "?x(var)?")
+
+   (* We first handle *special* cases of converting things to "Let" form... *)
+   and convert_ExpW (smartInj, isPattern, G, Eorig as D.App(E1, [(D.Visible, fileInfo3, E2)])) =
+          (case (D.whnfE E1, D.whnfE E2)
+	     of (D.Lam ([D.Eps(_, (D.Match([(D.Visible, D.Var (D.Fixed 1, fileInfo1))], E)), fileInfo1b)], _, fileInfo2),
+		 D.Fix (D, Efix)) =>
+	                  let 
+			    val Elist = (case (D.whnfE Efix)
+			                  of (D.ExpList Elist) => Elist
+                                           | _ => [Efix])
+			    val D1 = normalDecName(G, D)
+			    val fix = convFix (smartInj, G, I.Decl(G, D.InstantiableDec D1),D1, Elist)
+			    val E' = convert_Exp (smartInj, isPattern, I.Decl(G, D.InstantiableDec D1), E)
+			  in
+			    D'.LetFun (rDummy, fix, E')
+			  end
+
+	      | (D.Lam ([D.Eps(D, (D.Match([(D.Visible, D.Var (D.Fixed 1, fileInfo1))], E)), fileInfo1b)], _, fileInfo2),
+	         E2) =>
+			  let
+			    val (D, D') = convert_NormalDec (smartInj, G, D)
+			    val E2' = convert_Exp (smartInj, isPattern, G, E2)
+			    val E' = convert_Exp (smartInj, isPattern, I.Decl(G, D.InstantiableDec D), E)
+			  in
+			    case D' of
+			      D'.NormalDec(r, SOME s, T) => D'.LetVar(rDummy, D'.PatternAscribe(r, D'.PatternString(r, s), T), E2', E')
+			      | _ => raise Domain
+			  end
+	           
+	      | _ => convert_ExpW' (smartInj, isPattern, G, Eorig)
+	   )
+     | convert_ExpW (smartInj, isPattern, G, E) = convert_ExpW' (smartInj, isPattern, G, E)
+
+
+   and convert_ExpW' (smartInj, isPattern, G, D.Var (D.Fixed i, fileInfo)) =
+              let
+		val name =  (case (lookup(i,G))
+			       of NONE => ("%#" ^ (Int.toString i) ^ "%") (* variable doesn't have a name *) 
+			        | SOME s => varString(G, s, i))
+
+	      in
+		case (isPattern, I.ctxLookup(G, i))
+		  of (_, D.NonInstantiableDec (D.NewDecLF _)) => (* preferred Delphin syntax is to put this as "<x>" instead osf "x" 
+								    * although both are acceptable (when epsilons are explicit) 
+								    *)
+		                                                 D'.Quote(rDummy, D'.ExplicitLF (Fmt.String name))
+		   | (_, D.NonInstantiableDec _) => D'.VarString(rDummy, name)
+		   | (_, D.InstantiableDec (D.NormalDec (_, D.Meta _))) => D'.VarString(rDummy, name)
+		   | (true, D.InstantiableDec (D.NormalDec (_, D.LF (isP, _)))) =>(case D.whnfP isP
+											of D.Param => D'.Quote(rDummy, D'.ExplicitLF (Fmt.String (name ^ "#")))
+											 | _ => D'.Quote(rDummy, D'.ExplicitLF (Fmt.String name)))
+		   | (_, D.InstantiableDec (D.NormalDec (_, D.LF _))) => D'.Quote(rDummy, D'.ExplicitLF (Fmt.String name))
+	      end
+		  
+
+     | convert_ExpW' (smartInj, isPattern, G, D.Var B) = D'.VarString(rDummy, "?x(var)?")
 			                     (* raise Domain *)
 					    (* since it is in whnf, we know it is a variable *)
                                                     
-     | convert_ExpW (smartInj, G, D.Quote M) = D'.Quote(rDummy, D'.ExplicitLFTerm (LFformatExp(G, M)))
 
-     | convert_ExpW (smartInj, G, D.Unit) = D'.Unit rDummy
+     | convert_ExpW' (smartInj, isPattern, G, D.Quote M) = 
+          (let
+	    (* We now create a list of indices that we want the LF printer to add "#" to the end of its name.
+	     * We want all pattern variables that are parameters to be printed as "x#" instead of "x"
+	     * when printing patterns.
+	     *)
 
-     | convert_ExpW (smartInj, G, D.Lam (Clist, F, fileInfo)) = 
+	    fun getMarks (num, I.Decl(G, D.InstantiableDec (D.NormalDec (_, D.LF (isP, _))))) = 
+	           (case D.whnfP isP
+		      of D.Param => num :: getMarks(num+1, G)
+		       | _ => getMarks(num+1, G)
+		    )
+	      | getMarks (num, I.Decl(G, _)) = getMarks(num+1, G)
+		            (* Note that we do not want NonInstantiableDecs to be printed as "x#" as they are explicitly
+			     * created by new and hence do not need this extra information.
+			     *)
+	      | getMarks (_, I.Null) = [] 
+												  
+	    val markedList = if isPattern then getMarks (1, G) else []
+	    val Mfmt = Print.formatExpMarked(markedList, D.coerceCtx G, M)
+	   in
+	     D'.Quote(rDummy, D'.ExplicitLF Mfmt)
+	   end)
+
+
+     | convert_ExpW' (smartInj, isPattern, G, D.Unit) = D'.Unit rDummy
+
+     | convert_ExpW' (smartInj, isPattern, G, D.Lam (Clist, F, fileInfo)) = 
 	     D'.Lam (rDummy, map (fn C => convCaseBranch(smartInj, G, C)) Clist)
 
 
 
-     | convert_ExpW (smartInj, G, D.New (D, E, fileInfo)) = 
+     | convert_ExpW' (smartInj, isPattern, G, D.New (D as D.NewDecLF _, E, fileInfo)) = 
           let 
 	    val (D, D') = convert_NewDec (smartInj, G, D)
 	  in 
-	    D'.New (rDummy, D', convert_Exp(smartInj, I.Decl(G,D.NonInstantiableDec D), E))
+	    D'.New (rDummy, D', convert_Exp(smartInj, isPattern, I.Decl(G,D.NonInstantiableDec D), E))
 	  end
 
-     | convert_ExpW (smartInj, G, D.App (D.Visible, D.Lam ([D.Eps(_, (D.Match(D.Visible, D.Var (D.Fixed 1, fileInfo1), E)))], _, fileInfo2), D.Fix (D, D.ExpList Elist))) =
-	  let 
-	    val D1 = normalDecName(G, D)
-	    val fix = convFix (smartInj, G, I.Decl(G, D.InstantiableDec D1),D1, Elist)
-	    val E' = convert_Exp (smartInj, I.Decl(G, D.InstantiableDec D1), E)
-	  in
-	    D'.LetFun (rDummy, fix, E')
-	  end
-
-     | convert_ExpW (smartInj, G, D.App (D.Visible, D.Lam ([D.Eps(_, (D.Match(D.Visible, D.Var (D.Fixed 1, fileInfo1), E)))], _, fileInfo2), D.Fix (D, Efix))) =
-	  let 
-	    val D1 = normalDecName(G, D)
-	    val fix = convFix (smartInj, G, I.Decl(G, D.InstantiableDec D1),D1, [Efix])
-	    val E' = convert_Exp (smartInj, I.Decl(G, D.InstantiableDec D1), E)
-	  in
-	    D'.LetFun (rDummy, fix, E')
-	  end
-	  
-     | convert_ExpW (smartInj, G, D.App (D.Visible, D.Lam ([D.Eps(D, (D.Match(D.Visible, D.Var (D.Fixed 1, fileInfo1), E)))], _, fileInfo2), E2)) = 
-	  let
-	    val (D, D') = convert_NormalDec (smartInj, G, D)
-	    val E2' = convert_Exp (smartInj, G, E2)
-	    val E' = convert_Exp (smartInj, I.Decl(G, D.InstantiableDec D), E)
-	  in
-	    (* OLD-- D'.LetVar(rDummy, D', E2', E') *)
-	    case D' of
-	      D'.NormalDec(r, SOME s, T) => D'.LetVar(rDummy, D'.TypeAscribe(r, D'.VarString(r, s), T), E2', E')
-              | _ => raise Domain
-	  end
-
-	    
-     | convert_ExpW (smartInj, G, D.App (D.Visible, E1, E2)) = D'.App (rDummy, convert_Exp(smartInj, G, E1), convert_Exp(smartInj, G, E2))
-     | convert_ExpW (smartInj, G, D.App (D.Implicit, E1, E2)) = convert_Exp(smartInj, G, E1)
+     | convert_ExpW' (smartInj, isPattern, G, D.New (D as D.NewDecWorld _, E, fileInfo)) = 
+	  (* ignore NewDecWorld as the programmer is not exposed to it.. *)
+	  convert_Exp(smartInj, isPattern, I.Decl(G,D.NonInstantiableDec D), E)
 
 
-     | convert_ExpW (true, G, D.Pair(D.Quote M, D.Unit, _)) = D'.Quote(rDummy, D'.ExplicitLFTerm (LFformatExp(G, M)))
-     | convert_ExpW (true, G, D.Pair(D.Var(D.Fixed n, fileInfo), D.Unit, _)) = D'.Quote(rDummy, D'.ExplicitLFTerm (LFformatExp(G, I.Root(I.BVar (I.Fixed n), I.Nil))))
+     | convert_ExpW' (smartInj, isPattern, G, D.App (E1, args)) =
+	     let
+	       fun convertArgs [] = []
+		 | convertArgs ((D.Visible, fileInfo, E2)::args) = convert_Exp(smartInj, isPattern, G, E2) :: (convertArgs args)
+		 | convertArgs ((D.Implicit, fileInfo, E2)::args) = 
+			                  if (!Print.implicit) then
+					      convert_Exp(smartInj, isPattern, G, E2) :: (convertArgs args)
+					  else
+					      (convertArgs args)
+	     in
+	       case (convertArgs args)
+		 of [] => convert_Exp(smartInj, isPattern, G, E1)
+		  | args' => D'.App(rDummy, convert_Exp(smartInj, isPattern, G, E1), args')
+	     end
 
-     | convert_ExpW (smartInj, G, D.Pair (E1, E2, _)) = D'.Pair (rDummy, convert_Exp(smartInj, G, E1), convert_Exp(smartInj, G, E2))
+     | convert_ExpW' (smartInj, isPattern, G, D.Pair(E1, E2, _)) = (case (smartInj, D.whnfE E1, D.whnfE E2)
+						      of (true, D.Quote M, D.Unit) => convert_ExpW' (smartInj, isPattern, G, D.Quote M)
+						       | (true, D.Var(D.Fixed n, fileInfo), D.Unit) => 
+								    let
+								      val isLF = case I.ctxLookup(G, n)
+									         of D.InstantiableDec (D.NormalDec(_, D.LF _)) => true
+										  | D.NonInstantiableDec (D.NewDecLF _) => true
+										  | _ => false
+								    in
+								      if isLF then
+									convert_ExpW' (smartInj, isPattern, G, D.Quote (I.Root(I.BVar (I.Fixed n), I.Nil)))
+								      else
+									D'.Pair (rDummy, convert_Exp(smartInj, isPattern, G, E1), convert_Exp(smartInj, isPattern, G, E2))
+								    end
+									
+						       | _ => D'.Pair (rDummy, convert_Exp(smartInj, isPattern, G, E1), convert_Exp(smartInj, isPattern, G, E2)))
 
-     | convert_ExpW (smartInj, G, D.ExpList Elist) = raise Domain (* We cannot print this out currently..., typically should be under
+
+     | convert_ExpW' (smartInj, isPattern, G, D.ExpList Elist) = raise Domain (* We cannot print this out currently..., typically should be under
 							* projection which is handled below *)
 
-     | convert_ExpW (smartInj, G, D.Proj (E1, j)) = 
+     | convert_ExpW' (smartInj, isPattern, G, D.Proj (E1, j)) = 
 	  (* this projection is for mutual recursion...*)
 	  ((case (D.whnfE E1) of
-            (D.Fix (D, D.ExpList Elist)) => (* get jth element of list *)
+
+              (D.Fix (D, E)) => (* get jth element of list *)
 	                         (* We will convert this to
 				  * let fun f1 and fun fn....
                                   *  in fi end 
 				 *)
-	                          let 
+	                          let
+				    val Elist = case D.whnfE E
+				                of D.ExpList Elist => Elist
+						 | _ => raise Domain
+
 				    val D1 = normalDecName(G, D)
 				    val sL = case D1 of
 				             (D.NormalDec (SOME sL, _)) => sL
@@ -599,10 +721,9 @@ structure PrintDelphinInt =
 				    D'.LetFun (rDummy, fix, D'.VarString(rDummy, s))
 				  end
 
-
 	   | (D.ExpList Elist) =>  (case getElement(j, Elist)
 				            of NONE => raise Domain
-					     | SOME E => convert_Exp(smartInj, G, E))
+					     | SOME E => convert_Exp(smartInj, isPattern, G, E))
 
 				    
            | (D.Var (D.Fixed i, fileInfo)) => (case (lookupList(i, j, G)) of
@@ -610,68 +731,75 @@ structure PrintDelphinInt =
 				  | NONE => D'.VarString (rDummy, "Proj(" ^ (Int.toString i) ^"," ^ (Int.toString j) ^ ")"))
 
 
-	   | _ => raise Domain (* cannot print this out... *)
+	   | E => raise Domain (* cannot print this out... *)
 				  
 	   ) handle D.SubstFailed => raise Domain)
 
-     | convert_ExpW (smartInj, G, D.Pop (i, E)) = 
+
+     | convert_ExpW' (smartInj, isPattern, G, D.Pop (i, E, fileInfo)) = 
 	                  let
 			    val s =  
 			      (case (lookup(i,G))
                                   of NONE => "%#" ^ Int.toString(i) ^ "%"
 				   | SOME s => varString(G, s, i))
 			  in
-			    D'.Pop(rDummy, s, convert_Exp (smartInj, D.popCtx(i,G), E))
+			    case (I.ctxLookup (G, i))
+			      of (D.NonInstantiableDec (D.NewDecWorld _)) => (* do not print out
+										* pop  for world..
+										*)
+				                                               convert_Exp (smartInj, isPattern, D.popCtx(i,G), E)
+
+			       | _ => D'.Pop(rDummy, s, convert_Exp (smartInj, isPattern, D.popCtx(i,G), E))
 			  end
 
-     | convert_ExpW (smartInj, G, D.Fix (D, D.ExpList Elist)) = 
+     | convert_ExpW' (smartInj, isPattern, G, D.Fix (D, D.ExpList Elist)) = 
 	                          let 
 				    val D1 = normalDecName(G, D)
 				  in
 				    D'.Fix(rDummy, convFix (smartInj, G, I.Decl(G, D.InstantiableDec D1),D1, Elist))
 				  end
 
-     | convert_ExpW (smartInj, G, D.Fix (D, Efix)) = 
+     | convert_ExpW' (smartInj, isPattern, G, D.Fix (D, Efix)) = 
 	                          let 
 				    val D1 = normalDecName(G, D)
 				  in
 				    D'.Fix(rDummy, convFix (smartInj, G, I.Decl(G, D.InstantiableDec D1),D1, [Efix]))
 				  end
 
-     | convert_ExpW (smartInj, G, D.EVar ((r (* ref NONE *),F), t)) = 
+
+     | convert_ExpW' (smartInj, isPattern, G, D.EVar ((r (* ref NONE *),F), t)) = 
 				  D'.VarString(rDummy, getEVar(G, r)) (* Note: we ignore printing the substitution here *)
 
-     | convert_ExpW (smartInj, G, D.EClo _) = raise Domain (* not in whnf *)
+     | convert_ExpW' (smartInj, isPattern, G, D.EClo _) = raise Domain (* not in whnf *)
 
 
-    fun expToString (G, E, smartInj, isDetailed) = (varReset G ; Fmt.makestring_fmt(DP.ExpToFormat0(convert_Exp(smartInj, G, E), DP.baseK, isDetailed)))
+    fun expToString (G, E, smartInj, isDetailed, printEps) = (varReset G ; Fmt.makestring_fmt(DP.ExpToFormat0(convert_Exp(smartInj, false (* not pattern *), G, E), DP.baseK, isDetailed, printEps)))
 
      (* G |- E as D.Fix _ 
       * and it is the toplevel, so we do not want to rename the dec
       *)
-    fun topFixToString (G, E, smartInj, isDetailed) = 
+    fun topFixToString (G, E, smartInj, isDetailed, printEps) = 
       ( case (D.whnfE E)
-	  of D.Fix(D, D.ExpList Elist) => let
+	  of D.Fix (D, D.ExpList Elist) => let
 	                                     val _ = varReset G
 					     val C' = D'.Fix(rDummy, convFix (smartInj, G, I.Decl(G, D.InstantiableDec D), D, Elist))
 					  in
-					    Fmt.makestring_fmt(DP.ExpToFormat0(C', DP.baseK, isDetailed))
+					    Fmt.makestring_fmt(DP.ExpToFormat0(C', DP.baseK, isDetailed, printEps))
 					  end
-	   | D.Fix(D, Efix) => let
+	   | D.Fix (D, Efix) => let
 				 val _ = varReset G
 				 val C' = D'.Fix(rDummy, convFix (smartInj, G, I.Decl(G, D.InstantiableDec D), D, [Efix]))
 			       in
-				 Fmt.makestring_fmt(DP.ExpToFormat0(C', DP.baseK, isDetailed))
+				 Fmt.makestring_fmt(DP.ExpToFormat0(C', DP.baseK, isDetailed, printEps))
 			       end
    	   | _ => raise Domain
       )
 
 
+    (* User should name the context (using ctxName) before converting to string... *)
     fun typeToString (G, T, smartInj) = (varReset G ; Fmt.makestring_fmt(DP.TypesToFormat0(convert_Types(smartInj, G, T), DP.baseK)))
-
     fun formToString (G, F, smartInj) = (varReset G ; Fmt.makestring_fmt(DP.FormulaToFormat0(convert_Formula(smartInj, G, F), DP.baseK)))
-
-    fun expToFormat (G, E, smartInj, isDetailed) = (varReset G ; (DP.ExpToFormat0(convert_Exp(smartInj, G, E), DP.baseK, isDetailed)))
+    fun expToFormat (G, E, smartInj, isDetailed, printEps) = (varReset G ; (DP.ExpToFormat0(convert_Exp(smartInj, false (* not pattern *), G, E), DP.baseK, isDetailed, printEps)))
 
     fun normalDecToString(G, D, smartInj) = 
                   let
@@ -695,11 +823,21 @@ structure PrintDelphinInt =
 	in
 	  I.Decl (G', D.InstantiableDec (normalDecName (G', D)))
 	end
-      | ctxName (I.Decl (G, D.NonInstantiableDec D)) =
+      | ctxName (I.Decl (G, D.NonInstantiableDec (D as D.NewDecLF _))) =
 	let
 	  val G' = ctxName G
 	in
 	  I.Decl (G', D.NonInstantiableDec (newDecName (G', D)))
+	end
+
+      | ctxName (I.Decl (G, D.NonInstantiableDec (D as D.NewDecWorld _))) =
+	  (* no need to name these as they do not occur in expressions, 
+	   * since they are eliminate with var instead of pop.
+	   *)
+	let
+	  val G' = ctxName G
+	in
+	  I.Decl (G', D.NonInstantiableDec D)
 	end
 		    
 					     

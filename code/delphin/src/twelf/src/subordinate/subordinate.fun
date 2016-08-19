@@ -364,8 +364,8 @@ struct
       | respectsTypeN' (I.Root _, _) = ()
     and respectsTypeN (V) = respectsTypeN' (V, I.targetFam V)
 
-    fun respects (G, (V, s)) = respectsTypeN (Whnf.normalize (V, s))
-    fun respectsN (G, V) = respectsTypeN (V)
+    fun respects (V, s) = respectsTypeN (Whnf.normalize (V, s))
+    fun respectsN (V) = respectsTypeN (V)
 
     (* Printing *)
 

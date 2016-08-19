@@ -61,4 +61,9 @@ These may may be changed by the user.
       val  output_fmt:            (fmtstream * format) -> unit
       val  file_open_fmt:         string -> ( (unit -> unit) * fmtstream )
       val  with_open_fmt:         string -> (fmtstream -> 'a) -> 'a
+
+      (* Added by ABP.. Hack used in print.fun.. *)
+      val empty : format
+      val isEmpty : format -> bool
+
    end

@@ -28,19 +28,31 @@ struct
 
        Effects: EVars may be lowered
     *)
-    fun convExpW ((Uni(L1), _), (Uni(L2), _)) =
+
+    fun convB (B1, B2) = 
+         let
+	   val (B1', s1 (* id *)) = Whnf.whnfBVar (B1, IntSyn.id)
+	   val (B2', s2 (* id *)) = Whnf.whnfBVar (B2, IntSyn.id)
+	 in
+	   convBW (B1', B2')
+	 end
+	     
+    and convBW (Fixed k1, Fixed k2) = (k1 = k2)
+      | convBW (BVarVar ((r1, _, list1, _), sA), BVarVar ((r2, _, list2, _), sB)) =
+	       (* r1 and r2 are ref NONE since it is in whnf *)
+	       (r1 = r2) andalso convSub (sA, sB)
+
+      | convBW _ = false
+
+    and convExpW ((Uni(L1), _), (Uni(L2), _)) =
           eqUni (L1, L2)
 
       | convExpW (Us1 as (Root (H1, S1), s1), Us2 as (Root (H2, S2), s2)) =
 	  (* s1 = s2 = id by whnf invariant *)
           (* order of calls critical to establish convSpine invariant *)
           (case (H1, H2) of 
-	     (BVar (Fixed k1), BVar (Fixed k2)) => 
-	       (k1 = k2) andalso convSpine ((S1, s1), (S2, s2))
-	   | (BVar (BVarVar ((r1, _, _), sA)), BVar (BVarVar ((r2, _, _), sB))) =>
-	       (* r1 and r2 are ref NONE since it is in whnf *)
-	       (r1 = r2) andalso convSub (sA, sB)
-	       andalso convSpine ((S1, s1), (S2, s2))
+	     (BVar B1, BVar B2) => 
+	       convB (B1, B2) andalso convSpine ((S1, s1), (S2, s2))
 	   | (Const(c1), Const(c2)) => 	  
 	       (c1 = c2) andalso convSpine ((S1, s1), (S2, s2))
 	   | (Skonst c1, Skonst c2) =>
@@ -174,6 +186,7 @@ struct
       
   in
     val conv = convExp 
+    val convB = convB
     val convDec = convDec
     val convSub = convSub
   end (* local *)

@@ -32,7 +32,9 @@ structure LFparsing =
           val _ = Origins.installOrigin (cid, fileNameocOpt)
           val _ = Index.install fromCS (IntSyn.Const cid)
           val _ = IndexSkolem.install fromCS (IntSyn.Const cid)
+	  (* ADAM -- We never use Compile.
           val _ = (Timers.time Timers.compiling Compile.install) fromCS cid
+	    *)
           val _ = (Timers.time Timers.subordinate Subordinate.install) cid
           val _ = (Timers.time Timers.subordinate Subordinate.installDef) cid
         in

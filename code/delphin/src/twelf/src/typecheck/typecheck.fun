@@ -142,7 +142,7 @@ struct
 	in
 	  V
 	end
-      | inferCon (G, I.BVar _) = raise Domain
+      | inferCon (G, I.BVar (I.BVarVar ((r, A, list, cnstrs),t))) = I.EClo(A, t) 
 
       | inferCon (G, I.Proj (B,  i)) = 
         let 

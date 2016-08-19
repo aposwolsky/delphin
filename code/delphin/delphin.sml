@@ -10,7 +10,6 @@ struct
 
   val ContextRef : DelphinIntSyntax.decCtx ref = ref IntSyn.Null
   val subRef = ref (DelphinIntSyntax.id)
-  val wRef = ref (DelphinIntSyntax.Anything)
 
   fun server (name, _) =
     let
@@ -51,9 +50,9 @@ struct
        * from the compiled path..
        *)
       val _ = Delphin.changePath (OS.FileSys.getDir())
-      val _ = Delphin.resetMetaSig ()
+      val _ = Delphin.resetMetaSigAndWorld ()
 
-      val _ = interruptLoop (fn () => Delphin.top'(ContextRef, subRef, wRef)) 
+      val _ = interruptLoop (fn () => Delphin.top'(ContextRef, subRef)) 
 
 
     in

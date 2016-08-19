@@ -97,6 +97,16 @@ fun sparse () =
 	    if (calcBalance (0, cList) > 0) then false else true
 	  end
 
+	fun notInComment cList =
+	  let
+	    fun calcBalance (n, []) = n
+	      | calcBalance (n, (#"(")::(#"*"):: cList) = calcBalance (n+1, cList)
+	      | calcBalance (n, (#"*")::(#")")::cList) = calcBalance (n-1, cList)
+	      | calcBalance (n, _::cList) = calcBalance (n, cList)
+	  in
+	    if (calcBalance (0, cList) > 0) then false else true
+	  end
+
 	fun lastCharSemi (cList) = 
 	  (case trimFront'((List.rev (cList)))
 	      of (#";" :: _) => true
@@ -121,9 +131,9 @@ fun sparse () =
 	    val newS = s ^ s'
 	    val newSlist = String.explode newS
 
-	    val endParse = ((lastCharSemi newSlist) andalso (balancedParen newSlist)) orelse (lastTwoSemi newSlist)
+	    val endParse = ((lastCharSemi newSlist) andalso (balancedParen newSlist)) orelse ((lastTwoSemi newSlist) andalso (notInComment newSlist))
 
-	    (* ABP/CARSTEN:  Bug in SML/NJ:
+	    (* ABP:  Bug in SML/NJ:
 	     *    This was causing Delphin to simply crash
 	     *    when outputting a lot of data.
 	     *    By chance, I tried disabling things to do with

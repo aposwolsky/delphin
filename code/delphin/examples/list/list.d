@@ -13,6 +13,8 @@ sig	<bool : type>
 	<true : bool>
 	<false: bool>;
 
+params = .;
+
 fun append = fn <nil> <L>      => <L>
               | <cons X L> <K> => <cons X> @ (append <L> <K>) ;
 

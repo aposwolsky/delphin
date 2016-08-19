@@ -45,8 +45,8 @@ struct
 
     (* Returns either (Fixed k, s) or (BVarVar _, id) *)
     fun whnfBVar (Fixed k, s) = (Fixed k, s)
-      | whnfBVar (BVarVar ((ref (SOME B), _, _), t), s) = whnfBVar (B, comp(t, s))
-      | whnfBVar (BVarVar ((r as ref NONE, A, list), t), s) = (BVarVar ((r, A, list), comp(t, s)), id)
+      | whnfBVar (BVarVar ((ref (SOME B), _, _, _), t), s) = whnfBVar (B, comp(t, s))
+      | whnfBVar (BVarVar ((r as ref NONE, A, list, cnstrs), t), s) = (BVarVar ((r, A, list, cnstrs), comp(t, s)), id)
 
 
     (* etaContract (U, s, n) = k'

@@ -1,0 +1,95 @@
+%%% Intrinsically total hereditary substitution and identity
+%%% on expressions in spine form
+%%% 
+%%% Author: Frank Pfenning
+%%% March 2008
+
+% Types
+tp : type.				%name tp A.
+i : tp.
+=> : tp -> tp -> tp.
+%infix right 10 =>.
+
+% Natural numbers for termination of mutual induction
+nat : type.				%name nat N.
+zero : nat.
+succ : nat -> nat.
+0 : nat = zero.
+1 : nat = succ zero.
+
+% Terms, heads, and spines
+tm : tp -> type.			%name tm U.
+hd : tp -> type.			%name hd H.
+sp : tp -> tp -> type.			%name sp S.
+
+lm : (hd A -> tm B) -> tm (A => B).	% \h.U
+rt : hd A -> sp A i -> tm i.		% H @ S
+ap : tm A -> sp B i -> sp (A => B) i.	% (U ; S)
+nl : sp i i.				% ()
+
+% Order in mutual induction
+ord : nat -> type.			%name ord O.
+z : ord zero.
+s : ord N -> ord (succ N).
+
+%{
+% Substitution
+%{
+ subtm A _ U ([h] V h) = V' iff [U/h:A]V = V'
+ subsp A _ U ([h] S h) = S' iff [U/h:A]S = S'
+ reduce A _ U S = U'        iff (U | S) = S'
+}%
+subtm : {A:tp} ord 1 -> tm A -> (hd A -> tm B) -> tm B -> type.
+subsp : {A:tp} ord 1 -> tm A -> (hd A -> sp B i) -> sp B i -> type.
+reduce : {A:tp} ord 0 -> tm A -> sp A i -> tm i -> type.
+%mode subtm +A +O +U +V -V'.  %name subtm Sbtm.
+%mode subsp +A +O +U +S -S'.  %name subsp Sbsp.
+%mode reduce +A +O +U +S -U'. %name reduce Rd.
+
+subtm_lm : subtm A (s z) U ([h] lm [h2] V1 h h2) (lm [h2] V1' h2)
+	    <- ({h2:hd B2} subtm A (s z) U ([h] V1 h h2) (V1' h2)).
+subtm_rt_h : subtm A (s z) U ([h] rt h (S h)) U'
+	      <- subsp A (s z) U ([h] S h) S'
+	      <- reduce A z U S' U'.
+subtm_rt_H : subtm A (s z) U ([h] rt H (S h)) (rt H S')
+	      <- subsp A (s z) U ([h] S h) S'.
+subsp_ap : subsp A (s z) U ([h] ap (V h) (S h)) (ap V' S')
+	    <- subtm A (s z) U ([h] V h) V'
+	    <- subsp A (s z) U ([h] S h) S'.
+subsp_nl : subsp A (s z) U ([h] nl) nl.
+
+red_ap : reduce (B => A) z (lm [h] U h) (ap V S) U''
+	  <- subtm B (s z) V ([h] U h) U'
+	  <- reduce A z U' S U''.
+red_nl : reduce i z U nl U.
+
+%block bh : some {A:tp} block {h:hd A}.
+%worlds (bh) (subtm A O U V V') (subsp A O U S S') (reduce O A U S U').
+
+%total {(A1 A2 A3) (O1 O2 O3) (V1 S2 U3)}
+ (subtm A1 O1 _ V1 _)
+ (subsp A2 O2 _ S2 _)
+ (reduce A3 O3 U3 _ _).
+
+%unique
+ (subtm +A +O +U +V -1V')
+ (subsp +A +O +U +S -1S')
+ (reduce +A +O +U +S -1U').
+
+% Identity
+%{
+ eta A ([s] rt H s) = U  if eta_A(H) = U
+}%
+eta : {A:tp} (sp A i -> tm i) -> tm A -> type.
+%mode eta +A +V -U.
+
+eta_i : eta i ([s] V s) (V nl).
+eta_=> : eta (A => B) ([s] V s) (lm [h] U' h)
+	  <- ({h:hd A} eta A ([s] rt h s) (U h))
+	  <- ({h:hd A} eta B ([s] V (ap (U h) s)) (U' h)).
+
+%block bh : some {A:tp} block {h:hd A}.
+%worlds (bh) (eta A V U).
+%total A (eta A V _).
+%unique (eta +A +V -1U).
+}%
