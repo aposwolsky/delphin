@@ -1,0 +1,47 @@
+(**) Add more support of "_" in patterns.
+     For example, we do not allow patterns of the form ({<x>} _)
+     This is NOT equivalent to ({<x>} E) as the E cannot depend on x..
+     But it IS equivalent to ({<x>} (E \x)).
+     This is analogous to the "_" on the LF level...
+     But we should decide how to implement this.
+
+(**) Work on specifying parameters as x# in patterns.
+     The problem is more with syntax than with inference!
+     Currently it has some limited support of x# in patterns,
+     But if we have a pattern <x#> it ONLY allows access via "<x>", but
+     we may want it also for "x" of type A#... Maybe we should change the syntax?
+
+(**) EVars are raised to everything in the context, this can be a problem in forming
+     non-patterns.. For instance:
+	fun foo : <exp> -> <exp> = 
+	   fn [<E : exp -> exp>] (<lam ([x:exp] E x)> => (fn ({<x : exp#>} <_> => <lam ([x:exp] x)>)) ({<x : exp#>} foo <E x>));
+     This will abstract the pattern variable as dependend on E as well.
+     But the programmer can specify it more precisely by writing the pattern as "G x" instead of "_"
+     ****
+     Solution One:  in type reconstruction build evars in a context of only parameters!!!
+                Problem:  If the type is dependent on an "explicit" pattern-variable,
+	                  then it would fail in type reconstruction.
+     Solution Two:  EVars should NOT contain the entire context that they make sense in..
+			Rather, they should just contain the "relative" extension, i.e.
+			exactly what it expects to be abstracted...
+                    However, The current invariant is that the whole context is attached..
+     Solution Three:  Disallow explicit declaration of non-parameter pattern variables
+		      (as it is not an issue for parameter pattern-variables)
+		      and the non-parameter pattern vars are always inferrible.
+
+Things to explain
+(1) Scope of FVars are to the nearest "fn"
+(2) Tried to add Subordination check to unification... BUG!! 
+    The addition caused a bug in the original Twelf test suite.. I don't know why.
+    Disabled enhancement... (not sure if it was even necessary in the first place.)
+
+(3) Double Check Addition of BVarVar (look for "Fixed" in Twelf code)
+
+(4) UNSURE Fix.
+	In recon-term.fun it was printed out the "types" of mismatched terms.
+        Therefore, if you enter nat instead of exp, it would print out "type != type"
+        I changed this.. but was it intentional!!!  See recon-term.fun
+
+
+(5) TWELF BUG::
+Try replacing StringTree in recon-term with HashTable and watch what happens!!!

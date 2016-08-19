@@ -1,0 +1,128 @@
+Library
+  signature TIMING
+  structure Timing
+  signature LEXER
+  structure Lexer
+  signature TWELF
+  structure Twelf
+  signature PARSING
+  structure Parsing
+  signature PARSER
+  structure Parser
+  signature EXTSYN
+  signature TOMEGA
+  structure Tomega
+  signature PARSE_FIXITY
+  structure ParseFixity
+  structure ReconConDec
+  signature PARSE_CONDEC
+  structure ParseConDec
+  signature INDEX
+  structure Index
+  signature SUBORDINATE
+  structure Subordinate
+  signature MODECHECK
+  structure ModeCheck
+  signature MODSYN
+  structure ModSyn
+  signature TIMERS
+  structure Timers
+  signature COMPILE
+  structure Compile
+  signature INDEX
+  structure IndexSkolem
+
+  structure ParseTerm
+  structure ReconTerm
+  signature MTPI
+  structure MTPi
+  signature TYPECHECK
+  structure TypeCheck
+  signature CONVERTER
+  structure Converter
+  signature INTSYN
+  structure IntSyn
+  signature GLOBAL 
+  structure Global
+  structure PrintTwega
+  structure PrintXML
+  structure PrintOMDoc
+  structure Interactive
+  signature FLIT
+  structure Flit
+  signature STYLECHECK
+  structure StyleCheck
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../twelf/src/compat/sources.cm
+  ../twelf/src/timing/sources.cm 
+  ../twelf/src/stream/sources.cm
+  ../twelf/src/global/sources.cm
+  ../twelf/src/table/sources.cm
+  ../twelf/src/lambda/sources.cm
+  ../twelf/src/paths/sources.cm
+  ../twelf/src/print/sources.cm
+  ../twelf/src/typecheck/sources.cm
+  ../twelf/src/style/sources.cm
+  ../twelf/src/modes/sources.cm 
+  ../twelf/src/tabling/sources.cm 
+  ../twelf/src/terminate/sources.cm 
+  ../twelf/src/index/sources.cm
+  ../twelf/src/thm/sources.cm
+  ../twelf/src/order/sources.cm
+  ../twelf/src/m2/sources.cm
+  ../twelf/src/compile/sources.cm
+  ../twelf/src/opsem/sources.cm
+  ../twelf/src/modules/sources.cm
+  ../twelf/src/meta/sources.cm 
+  ../twelf/src/solvers/sources.cm
+  ../twelf/src/worldcheck/sources.cm
+  ../twelf/src/unique/sources.cm
+  ../twelf/src/cover/sources.cm
+  ../twelf/src/tomega/sources.cm 
+  ../twelf/src/prover/sources.cm
+  ../twelf/src/flit/sources.cm
+  ../twelf/src/frontend/unknownexn.sig 
+  ../twelf/src/frontend/unknownexn.fun 
+  ../twelf/src/frontend/unknownexn-smlnj.sml 
+  ../twelf/src/frontend/lexer.sig 
+  ../twelf/src/frontend/lexer.fun
+  ../twelf/src/frontend/parsing.sig
+  ../twelf/src/frontend/parsing.fun
+  ../twelf/src/frontend/recon-term.sig
+  ../twelf/src/frontend/recon-term.fun
+  ../twelf/src/frontend/recon-condec.sig
+  ../twelf/src/frontend/recon-condec.fun
+  ../twelf/src/frontend/recon-query.sig
+  ../twelf/src/frontend/recon-query.fun
+  ../twelf/src/frontend/recon-mode.sig
+  ../twelf/src/frontend/recon-mode.fun
+  ../twelf/src/frontend/recon-thm.sig
+  ../twelf/src/frontend/recon-thm.fun
+  ../twelf/src/frontend/recon-module.sig
+  ../twelf/src/frontend/recon-module.fun
+  ../twelf/src/frontend/parse-term.sig
+  ../twelf/src/frontend/parse-term.fun
+  ../twelf/src/frontend/parse-condec.sig
+  ../twelf/src/frontend/parse-condec.fun
+  ../twelf/src/frontend/parse-query.sig
+  ../twelf/src/frontend/parse-query.fun
+  ../twelf/src/frontend/parse-fixity.sig
+  ../twelf/src/frontend/parse-fixity.fun
+  ../twelf/src/frontend/parse-mode.sig
+  ../twelf/src/frontend/parse-mode.fun 
+  ../twelf/src/frontend/parse-thm.sig
+  ../twelf/src/frontend/parse-thm.fun
+  ../twelf/src/frontend/parse-module.sig
+  ../twelf/src/frontend/parse-module.fun
+  ../twelf/src/frontend/parser.sig
+  ../twelf/src/frontend/parser.fun
+  ../twelf/src/frontend/solve.sig
+  ../twelf/src/frontend/solve.fun
+  ../twelf/src/frontend/fquery.sig
+  ../twelf/src/frontend/fquery.fun
+  ../twelf/src/frontend/twelf.sig
+  ../twelf/src/frontend/twelf.fun
+  ../twelf/src/frontend/frontend.sml

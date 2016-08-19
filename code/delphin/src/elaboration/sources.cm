@@ -1,0 +1,19 @@
+Library
+  signature DELPHIN_ELABORATOR
+  structure DelphinElab
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../twelf/src/table/sources.cm
+  ../twelf/src/paths/sources.cm
+  ../twelf/src/lambda/sources.cm
+
+  ../typecheck/sources.cm
+
+  ../frontend/sources.frontend.cm
+  ../twelf/src/stream/sources.cm
+
+  sources.syntax.cm
+  convert.sig
+  convert.fun 

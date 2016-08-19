@@ -1,0 +1,35 @@
+Library
+  structure DelphinExtSyntax
+  structure DelphinIntSyntax
+  structure DelphinIntermediateSyntax
+  structure Print
+  structure PrintDelphinExt
+  structure PrintDelphinInt	
+  structure UnifyDelphinOpsemTrail
+  structure UnifyDelphinNoTrail
+  structure NormalizeDelphin
+  structure DelphinApprox
+  structure DelphinAbstract
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../twelf/src/paths/sources.cm
+  ../twelf/src/lambda/sources.cm
+  ../twelf/src/print/sources.cm
+  ../twelf/src/compat/sources.cm
+  ../twelf/src/formatter/sources.cm
+  ../twelf/src/trail/sources.cm
+  ../frontend/sources.frontend.cm
+  extSyntax.sml
+  intSyntax.sml
+  approx.sml
+  tempSyntax.sml
+  printDelphinExt.sml
+  printDelphinInt.sml
+  unifyDelphin.fun
+  unifyDelphin.sml
+  normalizeDelphin.sml
+  abstract.sig
+  abstract.fun
+  abstract.sml  

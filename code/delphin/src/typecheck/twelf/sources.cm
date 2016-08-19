@@ -1,0 +1,14 @@
+Library
+  signature TYPECHECKLF
+  structure TypeCheckLF
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../../twelf/src/lambda/sources.cm
+  ../../twelf/src/print/sources.cm
+  ../../twelf/src/paths/sources.cm
+  ../../twelf/src/names/sources.cm
+  typecheck.sig
+  typecheck.fun 
+  typecheck.sml

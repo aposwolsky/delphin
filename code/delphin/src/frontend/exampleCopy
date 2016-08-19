@@ -1,0 +1,100 @@
+<exp : type>
+<app : exp -> exp -> exp>
+<lam : (exp -> exp) -> exp>
+
+<cp : exp -> exp -> type>
+<cp_app : cp E1 F1 -> cp E2 F2 -> cp (app E1 E2) (app F1 F2)>
+<cp_lam : ({x:exp} cp x x -> cp (E x) (F x)) -> cp (lam E) (lam F)>
+
+
+sig cpParams = <x:exp, u: cp x x> ;
+
+cpfun <e:exp> (e:<exp>)
+or
+cpfun (<e> : <exp>) : <cp e e> =
+   case e of
+      (app E1 E2) => 
+         let D1 = cpfun E1 in
+         let D2 = cpfun E2 in
+         <cp_app D1 D2>
+
+     | (lam E') => 
+          next(
+            {b : cpParams}  
+	    let (D x u) = cpfun (E' (b.x)) in
+                prev <cp_lam D>
+            )
+
+     | ((B:cpParams).x) => (B.u) ;
+
+
+
+
+
+valSound <e:exp> <v:value> (d:<eval e v>) : <value v> =
+    case (e,v,d) of
+	(<fst E>,<V1>,<evalfst (D : eval E (pair V1 V2))>) =>
+              let vP = valSound <E> <pair V1 V2> <D>
+               in case (V1, V2, vP) of
+	          (<V1>, <V2>, <valPair P1 P2>) => P1
+
+
+x:<A>, y:<foo x>, z:<bar x>
+   |-- case (x,y,z) of (<z>, y, <barz>) |-- y 
+
+
+(*
+     | (lam E') => 
+          next(
+            {x : exp} {u: cp x x}
+	    let (D x u) = cpfun (E' x) in
+                prev (cp_lam D)
+            )
+
+     | N<x>N<u> x => u ;
+
+
+*)
+
+
+
+When we are explicit:
+
+sig cpParams = <x:exp, u:cp x x>
+
+cpfun :: {e:exp} <cp e e> = 
+   case e of
+      (app (E1:<exp>) (E2:<exp>)) => 
+         let D1 = cpfun E1 in
+         let D2 = cpfun E2 in
+         cp_app D1 D2
+
+     | (lam (E':<exp->exp>)) => 
+            {b : cpParams}
+            case (cpfun (E' b.x))
+             of  <D b.x b.u> =>
+                prev (cp_lam D)
+
+     | (b:cpParams).x => b.u
+
+
+
+
+cpfun (e : <exp>) : <cp e e> =
+   case e of
+      (app (E1:<exp>) (E2:<exp>)) => 
+         let D1 = cpfun E1 in
+         let D2 = cpfun E2 in
+         cp_app D1 D2
+
+     | (lam (E':<exp->exp>)) => 
+          next(
+            {b : cpParams}
+	    case (cpfun (E' (b.x))) of
+		(D x u) => prev (cp_lam D)
+	        (app e1 e2)
+	    let case ((D:[]<{x:exp} cp x x -> cp (E x) (F x)>) x u) = cpfun (E' x) in
+                prev (cp_lam D)
+            )
+
+     | ((B:cpParams).x) => (B.u) ;

@@ -1,0 +1,76 @@
+% The HOL-Nuprl connection.
+% Translation
+% Author: Carsten Schuermann, Mark-Oliver Stehr.
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Translation of HOL types 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+transtp : tp -> n-tm -> type.		%mode transtp +A -N.
+
+transtparr : transtp (A arr B) (pi T [x] S) 
+	      <- transtp B S
+	      <- transtp A T.
+
+transtpo : transtp o boolean.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Translation of HOL terms 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+transtm : tm A -> n-tm -> type.		%mode transtm +A -N.
+
+trans=> : transtm => =p=>.
+
+trans== : transtm (== : tm (A arr A arr o)) (=p= N)
+	  <- transtp A N.
+
+trans@ : transtm ((H :tm (B arr A)) @ (G:tm B)) (app T S)	  
+	  <- transtm G S
+	  <- transtm H T.
+
+trans\ : transtm (\ H : tm (A arr B)) (lam M)
+	  <- ({x:tm _}{y:n-tm} transtm x y -> transtm (H x) (M y))
+	  <- transtp A _.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Translation of HOL sentences  
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+transsen : tm o -> n-tm -> type.	%mode transsen +A -N.
+
+t-base : transsen H (^ M)
+	  <- transtm H M.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Translation of HOL theory of Booleans  
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+tc-true : transtm true tt.
+
+tc-false: transtm false ff.
+
+tc-neg  : transtm neg (lam [x] if x ff tt).
+
+tc-/|\  : transtm /|\ (lam [x] lam [y] if x y ff).
+
+tc-\|/  : transtm \|/ (lam [x] lam [y] if x tt y).
+
+tc-all| : transtm (all| : tm ((A arr o) arr o))
+	   (lam [p] v (pi T [x] ^ (app p x)))
+           <- transtp A T.
+
+tc-ex|  : transtm (ex| : tm ((A arr o) arr o))
+	   (lam [p] v (sigma T [x] ^ (app p x)))
+           <- transtp A T.
+
+tc-the| : transtm (the| : tm ((A arr o) arr A)) 
+	   (lam [p] decide (app inhabited 
+	      (set T ([x] ^ app p x))) ([x] x) ([x] arb T))
+           <- transtp A T.
+

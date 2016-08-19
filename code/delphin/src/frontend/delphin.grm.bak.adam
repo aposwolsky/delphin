@@ -1,0 +1,835 @@
+(* Grammar for Delphin *)
+(* Author:  Adam Poswolsky *)
+structure D = DelphinExtSyntax
+
+fun deReg (_, x) = x
+fun getReg (r, _) = r
+val join = Paths.join
+
+%%
+
+%name Delphin
+%pos int
+%header (functor DelphinLrValsFun (structure Token : TOKEN))
+
+%eop EOF
+%noshift EOF
+%verbose
+
+
+%term    ID of Paths.region * string 
+       | UNDERSCORE of Paths.region
+       | STAR  of Paths.region
+       | COMMA of Paths.region
+       | DOT of Paths.region
+       | POUND of Paths.region
+       | RTARROW  of Paths.region 
+       | EQARROW  of Paths.region 
+       | LTARROW of Paths.region 
+       | EQUAL of Paths.region 
+       | BAR of Paths.region
+       | BACKSLASH of Paths.region
+       | AND of Paths.region (* for mutual recursion *)
+       | TYPE of Paths.region 
+       | FUN of Paths.region
+       | UNIT of Paths.region
+       | CASE of Paths.region
+       | OF of Paths.region
+       | POP of Paths.region
+       | LET of Paths.region
+       | END of Paths.region
+       | VAL of Paths.region
+       | IN of Paths.region
+       | FN of Paths.region
+       | SEMICOLON of Paths.region 
+       | LTANGLE  of Paths.region
+       | RTANGLE  of Paths.region
+       | DBL_LTANGLE  of Paths.region
+       | DBL_RTANGLE  of Paths.region
+       | LTPAREN of Paths.region
+       | RTPAREN  of Paths.region 
+       | LTBRACKET   of Paths.region
+       | RTBRACKET  of Paths.region 
+       | LTBRACE   of Paths.region
+       | RTBRACE  of Paths.region
+       | COLON of Paths.region
+       | AT of Paths.region
+       | SIG of Paths.region
+       | USE of string
+       | EOF 
+
+       | ABBREV of Paths.region
+       | INFIX of Paths.region
+       | POSTFIX of Paths.region
+       | PREFIX of Paths.region
+       | NAME of Paths.region
+       | RIGHT of Paths.region
+       | LEFT of Paths.region
+       | DIGITS of Paths.region * int
+
+
+%nonterm    start of D.DelphinProgram
+	    | idopt of Paths.region * (string option)
+	    | delphinprogram of D.DelphinProgram
+            | topdec of D.TopDec
+	    | constant of D.TopDec
+	    | constants of D.DelphinProgram
+	    | lfdec of D.LFDec
+	    | lfdecNoOmit of D.LFDec
+	    | lfnormalDec of D.NormalDec
+	    | metaNormalDec of D.NormalDec
+	    | normaldec of D.NormalDec (* Where type can be omitted *)
+	    | newdec of D.NewDec (* Where type can be omitted *)
+	    | lfterm of D.LFTerm
+	    | lftermPat of D.LFTerm
+	    | metaPattern of D.Exp
+	    | metaterm of D.Exp
+	    | letlist of D.Exp
+	    | lftype of D.LFType
+	    | formula of D.Formula
+	    | precOption of D.Prec option
+	    | optSemis of unit
+	    | mutualdef of (Paths.region * D.NormalDec * D.Exp) list
+	    | kind of D.Kind
+	    | metatermListS of (Paths.region * D.Exp) list	
+	    | nonEmpCaseList of (D.CaseBranch list)
+	    | metacase of D.CaseBranch
+	    | nameOption of D.Name option
+	    | popID of Paths.region * string
+
+
+
+(* Set precedences *)
+%right SEMICOLON
+
+(* (e1,e2) => **** , here the => has lowest precedence *)
+%right EQARROW 
+
+(* We set RTBRACKET and RTBRACE to handle the following: 
+ * [x] B : C = [x] (B : C) 
+ * {x} A -> B = {x} (A -> B) 
+ *)
+%nonassoc RTBRACKET RTBRACE
+
+(* LET _ EQUAL _ IN M1 M2 = LET _ EQUAL _ IN (M1 M2) *)
+(* %nonassoc IN -- don't need this *)
+
+(* CASE ... OF ... *)
+(* %nonassoc OF *)
+
+(* association of BAR is only needed for list of cases *)
+%right BAR
+
+
+%nonassoc COLON
+
+%right RTARROW
+%left LTARROW
+
+%right COMMA STAR AND
+
+
+%nonassoc POP POUND
+
+(*
+ * Finally, we need to specify that Application
+ * is left associative.
+ * in addition, since it is just specified by juxtaposition
+ * we need to handle the nonterminals that it may see.
+ *)
+%nonassoc ID DIGITS RIGHT LEFT LTANGLE LTBRACKET  LTPAREN FN CASE LET LTBRACE UNDERSCORE (* LTBRACE is for new *)
+%left AT BACKSLASH (* AT is lifted application *) (* BACKSLASH is another way to write pop *)
+
+
+%start start
+
+%%
+
+start		: optSemis delphinprogram
+			(delphinprogram)
+
+delphinprogram	: 
+			(nil)
+		| SIG constants optSemis delphinprogram
+			(constants @ delphinprogram)
+		| topdec delphinprogram
+			(topdec::delphinprogram)
+
+optSemis	:
+			()
+		| SEMICOLON optSemis
+			()
+
+mutualdef	: 
+			(nil)
+		| AND metaNormalDec EQUAL metaterm mutualdef
+			(let
+	 		 val region = join(AND, 
+					D.getRegExp(metaterm))
+			 in
+			  ((region, metaNormalDec, metaterm)::mutualdef)
+			 end)
+
+
+constant	: USE
+			(D.LFUse USE)
+
+		| LTANGLE ID COLON kind RTANGLE nameOption precOption
+			(D.LFTypeConstant(join(getReg ID,D.getRegKind kind),deReg ID, kind, nameOption, precOption))
+
+
+		| LTANGLE ID COLON lftype RTANGLE precOption 
+			(
+				let 
+				   val r = join(getReg ID, D.getRegLFType lftype)
+				in
+				   D.LFObjectConstant(r,D.LFDec(r,SOME(deReg ID), lftype), precOption)
+				end
+			)
+
+		| LTANGLE lfdecNoOmit EQUAL lfterm RTANGLE ABBREV precOption
+		       ( D.LFDefinition(join(D.getRegLFDec lfdecNoOmit, D.getRegLFTerm lfterm),
+					lfdecNoOmit,
+					lfterm, true, precOption))
+
+		| LTANGLE lfdecNoOmit EQUAL lfterm RTANGLE precOption
+		       ( D.LFDefinition(join(D.getRegLFDec lfdecNoOmit, D.getRegLFTerm lfterm),
+					lfdecNoOmit,
+					lfterm, false, precOption))
+
+constants	: constant SEMICOLON
+			([constant])
+		| constant constants
+			(constant :: constants)
+
+
+
+
+topdec		: FUN metaNormalDec EQUAL metaterm mutualdef SEMICOLON optSemis
+			(let
+	 		 val region = join(FUN, 
+					D.getRegExp(metaterm))
+			 in
+			  D.MetaFix ((region, metaNormalDec, metaterm)::mutualdef)
+			 end)
+
+		| metaterm SEMICOLON optSemis
+			(let
+	 		 val region = D.getRegExp(metaterm)
+			 in
+			  D.MetaVal(region, NONE, metaterm)
+			 end)
+
+
+		| VAL ID EQUAL metaterm SEMICOLON optSemis
+			(let
+	 		 val region = join(VAL, D.getRegExp(metaterm))
+			 in
+			  D.MetaVal(region, SOME (deReg ID), metaterm)
+			 end)
+
+		| VAL ID COLON formula EQUAL metaterm SEMICOLON optSemis
+			(let
+	 		 val region = join(VAL, D.getRegExp(metaterm))
+	  		 val T = D.Meta (D.getRegFormula(formula), D.Existential, formula)
+			 in
+			  D.MetaVal(region, SOME (deReg ID), 
+				   D.TypeAscribe(region,
+						metaterm,
+                                                T))
+			 end)
+
+
+		| USE SEMICOLON optSemis
+			(D.Use (USE))
+			
+
+kind		: TYPE
+			(D.Type TYPE)
+		| LTBRACE lfdec RTBRACE kind
+			(D.PiKind(
+			 join(LTBRACE,D.getRegKind(kind)), 
+			 lfdec, 
+			 kind))
+		| lftype RTARROW kind
+			(let
+                           val r1 = D.getRegLFType(lftype)
+			 in
+				 D.PiKind(
+				 join(r1,D.getRegKind(kind)), 
+				 D.LFDec(r1, NONE, lftype), 
+				 kind)
+			 end)
+		| LTPAREN kind RTPAREN
+			(kind) (* We do not need to save paren information here.. as it doesn't matter *)
+
+nameOption	: 
+			(NONE)
+		| NAME ID
+			(SOME (D.OneName(join(NAME, getReg ID), deReg ID)))
+
+		| NAME ID ID
+			(SOME (D.TwoNames(join(NAME, getReg ID2), deReg ID1, deReg ID2)))
+
+
+precOption	: 
+			(NONE)
+		| INFIX LEFT DIGITS
+			(SOME (D.INFIXL(join(INFIX, getReg DIGITS),deReg DIGITS)))
+		| INFIX RIGHT DIGITS
+			(SOME (D.INFIXR(join(INFIX, getReg DIGITS),deReg DIGITS)))
+		| INFIX DIGITS
+			(SOME (D.INFIXN(join(INFIX, getReg DIGITS),deReg DIGITS)))
+		| POSTFIX DIGITS
+			(SOME (D.POSTFIX(getReg DIGITS, deReg DIGITS)))
+		| PREFIX DIGITS
+			(SOME (D.PREFIX(getReg DIGITS, deReg DIGITS)))
+
+lftype		: ID
+			(D.TypeID ID)
+		| lftype lfterm
+			%prec AT (* AT is an application *)
+			(D.TypeApp
+			(join(D.getRegLFType(lftype), D.getRegLFTerm(lfterm)),
+			lftype, lfterm))
+		| LTBRACE lfdec RTBRACE lftype
+			(D.PiType(
+			 join(LTBRACE,D.getRegLFType(lftype)), 
+			 lfdec, 
+			 lftype))
+
+		| lftype RTARROW lftype
+			(D.RtArrow 
+			(join(D.getRegLFType(lftype1), D.getRegLFType(lftype2)),
+			 lftype1, lftype2))
+		| lftype LTARROW lftype
+			(D.LtArrow 
+			(join(D.getRegLFType(lftype1), D.getRegLFType(lftype2)),
+			 lftype1, lftype2))
+		| UNDERSCORE
+			(D.OmitType (UNDERSCORE))
+		| LTPAREN lftype RTPAREN
+			(D.ParenType (join(LTPAREN,RTPAREN), lftype))
+
+
+lfterm		: ID
+			(D.ObjectID (getReg ID, false, deReg ID))
+		| LTBRACKET lfdec RTBRACKET lfterm
+			(D.Fn (join(LTBRACKET, D.getRegLFTerm(lfterm)), lfdec, lfterm))
+		| lfterm lfterm
+			%prec AT (* AT is an application *)
+			(D.LFApp 
+ 			(join(D.getRegLFTerm(lfterm1), D.getRegLFTerm(lfterm2)),
+			 lfterm1,lfterm2))
+	        | lfterm COLON lftype
+			(D.Of
+			(join(D.getRegLFTerm(lfterm), D.getRegLFType(lftype)),
+			lfterm,
+			lftype))
+
+	        | lfterm COLON LTANGLE lftype RTANGLE
+			(* This rule isn't necessary, but makes it look nicer *)
+			(D.Of
+			(join(D.getRegLFTerm(lfterm), D.getRegLFType(lftype)),
+			lfterm,
+			lftype))
+		| UNDERSCORE
+			(D.OmitTerm (UNDERSCORE))
+		| LTPAREN lfterm RTPAREN
+			(D.ParenTerm (join(LTPAREN,RTPAREN), lfterm))
+
+
+idopt		: ID
+			(getReg ID, SOME (deReg ID))
+		| UNDERSCORE
+			(UNDERSCORE, NONE)
+
+lfdec		: idopt COLON lftype
+			(D.LFDec (join(getReg idopt, D.getRegLFType(lftype)), deReg idopt, lftype))
+		| idopt
+			(D.LFDec (getReg idopt, deReg idopt, D.OmitType(getReg idopt)))
+
+lfdecNoOmit	: ID COLON lftype
+			(D.LFDec (join(getReg ID, D.getRegLFType(lftype)), SOME (deReg ID), lftype))
+		| ID
+			(D.LFDec (getReg ID, SOME(deReg ID), D.OmitType(getReg ID)))
+
+
+
+formula		: UNIT
+			(D.Top (UNIT))
+
+		| DBL_LTANGLE ID COLON lftype DBL_RTANGLE RTARROW formula	
+			 (D.All(
+			   join(DBL_LTANGLE, D.getRegFormula(formula)), D.Implicit,			
+			   D.NormalDec(join(DBL_LTANGLE,DBL_RTANGLE),SOME(deReg ID),D.LF(D.getRegLFType(lftype),D.Existential, lftype)),
+			  formula))
+
+		| DBL_LTANGLE ID DBL_RTANGLE RTARROW formula	
+			 ( let
+				val r = getReg ID
+			   in
+
+			   D.All(
+			   join(DBL_LTANGLE, D.getRegFormula(formula)), D.Implicit,	
+			   D.NormalDec(join(DBL_LTANGLE,DBL_RTANGLE),SOME(deReg ID),D.LF(r,D.Existential, D.OmitType r)),
+			  formula)
+
+			   end)
+
+	
+		| LTANGLE ID COLON lftype RTANGLE RTARROW formula
+			 (D.All(
+			   join(LTANGLE, D.getRegFormula(formula)), D.Visible,
+			   D.NormalDec(join(LTANGLE,RTANGLE),SOME(deReg ID),D.LF(D.getRegLFType(lftype),D.Existential, lftype)),
+			  formula))
+
+		| LTANGLE ID COLON lftype POUND RTANGLE RTARROW formula
+			 (D.All(
+			   join(LTANGLE, D.getRegFormula(formula)), D.Visible,
+			   D.NormalDec(join(LTANGLE,RTANGLE),SOME(deReg ID),D.LF(join(D.getRegLFType(lftype), POUND),D.Param, lftype)),
+			  formula))
+
+
+		| formula RTARROW formula
+			 (let val r1 = D.getRegFormula(formula1)
+			      val r2 = join(r1, D.getRegFormula(formula2))
+			  in
+			    D.All(r2, D.Visible,
+			      D.NormalDec(r1,NONE,D.Meta(r1,D.Existential, formula1)),
+			      formula2)
+			  end)
+
+
+		| formula POUND RTARROW formula
+			 (let val r1 = join(D.getRegFormula(formula1), POUND)
+			      val r2 = join(r1, D.getRegFormula(formula2))
+			  in
+			    D.All(r2, D.Visible,
+			      D.NormalDec(r1,NONE,D.Meta(r1,D.Param, formula1)),
+			      formula2)
+			  end)
+
+
+		| LTANGLE ID COLON lftype RTANGLE STAR formula
+			 (D.Exists(
+			   join(LTANGLE, D.getRegFormula(formula)),
+			   D.NormalDec(join(LTANGLE,RTANGLE),SOME(deReg ID),D.LF(D.getRegLFType(lftype),D.Existential, lftype)),
+			  formula))
+
+		| LTANGLE ID COLON lftype POUND RTANGLE STAR formula
+			 (D.Exists(
+			   join(LTANGLE, D.getRegFormula(formula)),
+			   D.NormalDec(join(LTANGLE,RTANGLE),SOME(deReg ID),D.LF(join(D.getRegLFType(lftype), POUND),D.Param, lftype)),
+			  formula))
+
+
+		| formula STAR formula
+			 (let val r1 = D.getRegFormula(formula1)
+			      val r2 = join(r1, D.getRegFormula(formula2))
+			  in
+			    D.Exists(r2,
+			      D.NormalDec(r1,NONE,D.Meta(r1,D.Existential, formula1)),
+			      formula2)
+			  end)
+
+
+		| formula POUND STAR formula
+			 (let val r1 = join(D.getRegFormula(formula1), POUND)
+			      val r2 = join(r1, D.getRegFormula(formula2))
+			  in
+			    D.Exists(r2,
+			      D.NormalDec(r1,NONE,D.Meta(r1,D.Param, formula1)),
+			      formula2)
+			  end)
+
+		| LTBRACE newdec RTBRACE formula
+			 (D.Nabla(
+			   join(LTBRACE, D.getRegFormula(formula)),
+			   newdec,
+			  formula))
+
+
+		| UNDERSCORE
+			(D.OmittedFormula (UNDERSCORE))
+
+		| LTANGLE lftype RTANGLE
+			(* This stands for a pair (<A> * top) *)
+			(
+                         let 
+				val r = join(LTANGLE, RTANGLE)
+			 in
+				D.Exists(r, D.NormalDec(r, NONE, D.LF(r, D.Existential, lftype)), D.Top r)
+			 end
+			)
+
+		| LTANGLE lftype POUND RTANGLE
+			(* This stands for a pair (<A#> * top) *)
+			(
+                         let 
+				val r = join(LTANGLE, RTANGLE)
+			 in
+				D.Exists(r, D.NormalDec(r, NONE, D.LF(r, D.Param, lftype)), D.Top r)
+			 end
+			) 
+
+
+		| LTPAREN formula RTPAREN
+			(formula)
+
+lfnormalDec	: ID COLON lftype
+			(D.NormalDec(join(getReg ID, D.getRegLFType(lftype)), SOME(deReg ID),
+				    D.LF(D.getRegLFType(lftype), D.Existential, lftype)))
+		| ID COLON lftype POUND
+			( let val r = D.getRegLFType(lftype)
+		          in
+			    D.NormalDec(join(getReg ID, POUND), SOME(deReg ID),
+				    D.LF(join(r,POUND), D.Param, lftype))
+			  end)
+		| ID
+			(let val r = getReg ID
+			 in
+                           D.NormalDec(r, SOME(deReg ID),
+				     D.LF(r, D.OmittedParam, D.OmitType r))
+			end)
+
+		| ID POUND
+			(let val r = join(getReg ID, POUND)
+			 in
+                           D.NormalDec(r, SOME(deReg ID),
+				     D.LF(r, D.Param, D.OmitType r))
+			end)
+
+metaNormalDec	: ID COLON formula
+			(let val r1 = getReg ID
+			     val r2 = D.getRegFormula formula
+			     val r3 = join(r1,r2)
+			 in 
+			    (D.NormalDec(r3, SOME(deReg ID), 
+					    D.Meta(r2, D.Existential, formula)))
+			 end)
+
+		| ID COLON formula POUND
+			(let val r1 = getReg ID
+			     val r2 = D.getRegFormula formula
+			     val r3 = join(r1,POUND)
+			 in 
+			    (D.NormalDec(r3, SOME(deReg ID), 
+					    D.Meta(r2, D.Param, formula)))
+			 end)
+
+		| ID 
+			(let val r = getReg ID
+			 in 
+			    (D.NormalDec(r, SOME(deReg ID), 
+					    D.Meta(r, D.OmittedParam, D.OmittedFormula r)))
+			 end)
+
+(* This refers to declarations where we can omit the type, but we must have the identifier *)
+normaldec	: LTANGLE lfnormalDec RTANGLE
+			(lfnormalDec)
+		| metaNormalDec
+			(metaNormalDec)
+
+		| LTPAREN normaldec RTPAREN
+			(normaldec)
+
+
+newdec		: LTANGLE ID COLON lftype POUND RTANGLE
+		  	(D.NewDecLF(join(LTANGLE, RTANGLE), SOME(deReg ID), lftype))
+		| LTANGLE ID COLON lftype RTANGLE (* we forgive if the user forgot to end it with pound *)
+		  	(D.NewDecLF(join(LTANGLE, RTANGLE), SOME(deReg ID), lftype))
+		| LTANGLE ID RTANGLE
+			(let val r = getReg ID 
+			 in
+			   D.NewDecLF(r, SOME(deReg ID), D.OmitType(r))
+			 end)
+
+		| ID COLON formula POUND
+			(D.NewDecMeta (join(getReg ID, POUND), SOME(deReg ID), formula))
+
+		| ID COLON formula (* It MUST end with POUND, but if the user forgot.. we will forgive them *)
+			(D.NewDecMeta (join(getReg ID, D.getRegFormula(formula)), SOME(deReg ID), formula))
+
+		| ID
+			(let val r = getReg ID
+			 in 
+	  		    D.NewDecMeta (r, SOME(deReg ID), D.OmittedFormula r)
+			 end)
+
+
+lftermPat	: ID
+			(D.ObjectID (getReg ID, false, deReg ID))
+		| ID POUND
+			(D.ObjectID (getReg ID, true, deReg ID))
+		| LTBRACKET lfdec RTBRACKET lftermPat
+			(D.Fn (join(LTBRACKET, D.getRegLFTerm(lftermPat)), lfdec, lftermPat))
+		| lftermPat lftermPat
+			%prec AT (* AT is an application *)
+			(D.LFApp 
+ 			(join(D.getRegLFTerm(lftermPat1), D.getRegLFTerm(lftermPat2)),
+			 lftermPat1,lftermPat2))
+	        | lftermPat COLON lftype
+			(D.Of
+			(join(D.getRegLFTerm(lftermPat), D.getRegLFType(lftype)),
+			lftermPat,
+			lftype))
+
+		| lftermPat COLON lftype POUND
+			(
+                           let
+			        fun makeParam (D.ObjectID(r,_,s)) = D.ObjectID(r, true, s)
+			          | makeParam E = E
+
+                                val r = join(D.getRegLFTerm(lftermPat), POUND)
+
+				val E = makeParam lftermPat
+			   in
+				D.Of (r, E, lftype)
+			   end
+                        )
+
+
+	        | lftermPat COLON LTANGLE lftype RTANGLE
+			(* This rule isn't necessary, but makes it look nicer *)
+			(D.Of
+			(join(D.getRegLFTerm(lftermPat), D.getRegLFType(lftype)),
+			lftermPat,
+			lftype))
+		| UNDERSCORE
+			(D.OmitTerm (UNDERSCORE))
+		| LTPAREN lftermPat RTPAREN
+			(D.ParenTerm (join(LTPAREN,RTPAREN), lftermPat))
+
+
+metaPattern	: ID
+			(D.VarString (getReg ID,deReg ID))
+		| UNDERSCORE
+			(D.OmittedPat UNDERSCORE)
+		| LTANGLE lftermPat RTANGLE
+			(D.Quote (join(LTANGLE,RTANGLE), lftermPat))
+		| metaPattern COLON formula
+			(let
+			  val T = D.Meta (D.getRegFormula(formula), D.Existential, formula)
+			 in
+			   D.TypeAscribe(
+			   join(D.getRegExp(metaPattern), D.getRegTypes T),
+			   metaPattern,
+			   T)
+			 end)
+
+		| metaPattern COLON formula POUND
+			(let
+			  val T = D.Meta (D.getRegFormula(formula), D.Param, formula)
+			 in
+			   D.TypeAscribe(
+			   join(D.getRegExp(metaPattern), POUND),
+			   metaPattern,
+			   T)
+			 end)
+
+		| LTPAREN RTPAREN
+			(D.Unit(join(LTPAREN,RTPAREN)))
+
+		| metaPattern COMMA metaPattern
+			(D.Pair(
+			 join(D.getRegExp(metaPattern1), D.getRegExp(metaPattern2)),
+			 metaPattern1, 
+			 metaPattern2))
+
+		| LTBRACE newdec RTBRACE metaPattern
+			(D.New(join(LTBRACE, D.getRegExp(metaPattern)), 
+			      newdec, metaPattern))
+
+		| metaPattern BACKSLASH ID
+			(D.Pop(join(D.getRegExp(metaPattern), getReg ID), deReg ID, metaPattern))
+
+		| POP popID metaPattern
+			(D.Pop(join(POP,D.getRegExp(metaPattern)), deReg popID, metaPattern))
+		
+
+		| LTPAREN metaPattern RTPAREN
+			(metaPattern)
+
+
+
+metaterm	: ID
+			(D.VarString (getReg ID,deReg ID))
+
+		| LTANGLE lfterm RTANGLE
+			(D.Quote (join(LTANGLE,RTANGLE), lfterm))
+
+		| LTPAREN RTPAREN
+			(D.Unit(join(LTPAREN,RTPAREN)))
+
+
+		| LTBRACE newdec RTBRACE metaterm
+			(D.New(join(LTBRACE, D.getRegExp metaterm), newdec, metaterm))
+		
+
+		| metaterm metaterm
+			%prec AT (* AT is an application *)
+			(D.App(
+			 join(D.getRegExp(metaterm1), D.getRegExp(metaterm2)),
+			 metaterm1, 
+			 metaterm2))
+
+		| metaterm COMMA metaterm
+			(D.Pair(
+			 join(D.getRegExp(metaterm1), D.getRegExp(metaterm2)),
+			 metaterm1, 
+			 metaterm2))
+
+		| metaterm BACKSLASH ID
+			(D.Pop(join(D.getRegExp(metaterm), getReg ID), deReg ID, metaterm))
+
+		| POP popID metaterm
+			(D.Pop(join(POP,D.getRegExp(metaterm)), deReg popID, metaterm))
+
+		| FN DOT
+			(D.Lam (join(FN, DOT), []))
+
+		| FN nonEmpCaseList
+			( 
+			   let fun getRegC [C] = D.getRegCaseBranch C
+				| getRegC (C::cs) = join(D.getRegCaseBranch C, getRegC cs)
+				| getRegC _ = raise Domain 
+			
+                               val r = join(FN, getRegC nonEmpCaseList)
+			  in
+			    D.Lam (r, nonEmpCaseList)
+			 end)
+
+
+		
+		| metaterm COLON formula
+			(let
+	                   val T = D.Meta (D.getRegFormula(formula), D.Existential, formula)
+			 in
+		           D.TypeAscribe(
+			   join(D.getRegExp(metaterm), D.getRegTypes T),
+			   metaterm,
+			   T)
+			 end)
+
+
+		| metaterm COLON formula POUND
+			(let
+	                   val T = D.Meta (D.getRegFormula(formula), D.Param, formula)
+			 in
+		           D.TypeAscribe(
+			   join(D.getRegExp(metaterm), POUND),
+			   metaterm,
+			   T)
+			 end)
+
+
+		| metaterm AT metaterm
+			(D.LiftedApp(
+			 join(D.getRegExp(metaterm1), D.getRegExp(metaterm2)),
+			 metaterm1, 
+			 metaterm2))
+
+		| LET VAL metaPattern EQUAL metaterm letlist END
+			(D.LetVar (join(LET, END), metaPattern, metaterm, letlist))
+
+		(* OLD
+		| LET VAL normaldec EQUAL metaterm letlist END
+			(D.LetVar (join(LET, END), normaldec, metaterm, letlist))
+		*)
+
+		| LET FUN metaNormalDec EQUAL metaterm mutualdef letlist END
+			(D.LetFun (join(LET, END),
+				   (join(FUN, D.getRegExp metaterm),metaNormalDec, metaterm)::mutualdef,
+				   letlist))
+
+		| LTPAREN metaterm RTPAREN
+			(metaterm)
+
+		| metaterm SEMICOLON metaterm
+			(D.Sequence ((D.getRegExp metaterm1, metaterm1) :: [(D.getRegExp metaterm2, metaterm2)]))
+
+(* ADAM
+		| LTPAREN metaterm metatermListS RTPAREN
+			(D.Sequence ((D.getRegExp metaterm, metaterm) :: metatermListS))
+*)
+
+		| CASE metaterm OF DOT
+			(D.App(join(CASE,DOT), D.Lam(DOT, []), metaterm))
+
+		| CASE metaterm OF nonEmpCaseList
+			( 
+			   let fun getRegC [C] = D.getRegCaseBranch C
+				| getRegC (C::cs) = join(D.getRegCaseBranch C, getRegC cs)
+				| getRegC _ = raise Domain 
+			
+                               val r = getRegC nonEmpCaseList
+			  in
+			    D.App(join(CASE,r),
+				  D.Lam (r, nonEmpCaseList),
+				  metaterm)
+			 end)
+
+
+
+
+letlist		: IN metaterm
+			(metaterm)
+
+		| VAL metaPattern EQUAL metaterm letlist
+			(D.LetVar (join(VAL, D.getRegExp(letlist)), metaPattern, metaterm, letlist))
+
+		(* OLD
+		| VAL normaldec EQUAL metaterm letlist
+			(D.LetVar (join(VAL, D.getRegExp(letlist)), normaldec, metaterm, letlist))
+		*)
+
+		| FUN metaNormalDec EQUAL metaterm mutualdef letlist
+			(D.LetFun (join(FUN, D.getRegExp(letlist)),
+				   (join(FUN, D.getRegExp metaterm),metaNormalDec, metaterm)::mutualdef,
+				   letlist))
+
+metatermListS	: SEMICOLON metaterm 
+			([(D.getRegExp metaterm, metaterm)])
+(*
+		| SEMICOLON  metaterm metatermListS
+			((D.getRegExp metaterm, metaterm)::metatermListS)
+*)
+
+nonEmpCaseList	: metacase
+			%prec BAR
+			(* Need to specify %prec for these rules
+			 * and that BAR is right associative above
+			 * so that it shifts whenever it sees BAR.
+			 *)
+			([metacase])
+		| metacase BAR nonEmpCaseList
+			(metacase :: nonEmpCaseList)
+
+
+metacase	: LTBRACKET normaldec RTBRACKET metacase
+			(D.Eps(join(LTBRACKET, D.getRegCaseBranch metacase), normaldec, metacase))
+		| LTBRACE newdec RTBRACE metacase
+			(D.NewC(join(LTBRACE, D.getRegCaseBranch metacase), newdec, metacase))
+		| metacase BACKSLASH ID
+			(D.PopC(join(D.getRegCaseBranch(metacase), getReg ID), deReg ID, metacase))
+		| POP popID metacase
+			(D.PopC(join(POP,D.getRegCaseBranch(metacase)), deReg popID, metacase))
+		| metaPattern EQARROW metaterm
+			(D.Match(join(D.getRegExp metaPattern, D.getRegExp metaterm), metaPattern, metaterm))
+		| metaPattern AND metacase
+			(* We allow an "optional" and between patterns *)
+			(D.MatchAnd(join(D.getRegExp metaPattern, D.getRegCaseBranch metacase), metaPattern, metacase))
+		| metaPattern metacase
+			%prec AT (* AT is an application *)
+			(D.MatchAnd(join(D.getRegExp metaPattern, D.getRegCaseBranch metacase), metaPattern, metacase))
+
+		| LTPAREN metacase RTPAREN
+			(metacase)
+
+
+(* this is useful so it parses "pop x pop u E Y" as "pop x pop u (E Y)"
+ * otherwise it can be parsed as "pop x pop (u E) Y"
+ *)
+popID		: ID
+			(ID)

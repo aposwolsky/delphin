@@ -1,0 +1,463 @@
+Coverage Checker
+Author: Frank Pfenning with Carsten Schuermann
+
+Version 1 --- only closed queries and predicates
+          --- only input coverage
+
+Coverage checking is local.  See also %total below.
+
+Syntax:
+
+%covers mdecl.
+
+where mdecl is a short or full mode declaration.
+
++ means input coverage
+* means no coverage checking
+- means no coverage checking (see %total below)
+
+Mon Mar 12 23:27:16 2001 -fp
+Version 2 --- added proper constraint handling
+
+- When constraints remain after splitting, try to split over other
+  candidates.  If no candidates can be split, fail.
+
+- When constraints remain after matching, fail.
+
+Mon Mar 19 07:16:19 2001 -fp
+Version 3 --- added totality checking for closed worlds
+          --- still no subordination
+
+Syntax:
+
+%total tdecl.
+
+where tdecl is a termination declaration.
+
+Mon Dec 17 17:37:23 2001
+Version 4 --- worlds, subordination, and finitary splitting
+Tagged as input-cover on branch coverage
+
+- added worlds and variables blocks to coverage checking
+- added subordination when generating EVar's in order
+  to prevent spurious dependencies
+- generalized checking for impossible cases
+  by checking for variables with finitely many
+  instances without creating recursion
+- uses subordination in order to eliminate some
+  apparent recusion fo finitary splitting.
+
+Instruction for branch on coverage:
+
+     % tag currently checked out version
+
+     cvs tag -b coverage     % tag current working version
+     cvs update -r coverage  % switch current working version to branch
+
+     % checking out a branch (alternative to cvs update -r coverage)
+     cvs checkout -r coverage twelf
+
+     % merging changes from a branch back into the main development
+     cvs checkout twelf      % get fresh copy of main branch
+     cd twelf                
+     cvs update -j coverage  % join branch coverage
+     cvs commit -m "included branch 'coverage'"
+			     % commit changes to main branch
+
+Fri Dec 28 10:52:29 2001 -fp
+Integrated the coverage checker back into the main branch.
+
+Fri Dec 28 10:52:45 2001 -fp
+Bugs found in lp
+
+uni-sound.elf
+ss_and  : s_sound (s_and S2 S1) (andi D1 D2)
+	   <- s_sound S1 D1
+	   <- s_sound S2 D2.
+instead of 
+ss_and  : s_sound (s_and S2 S1) (andi D2 D1)
+	   <- s_sound S1 D1
+	   <- s_sound S2 D2.
+
+res-complete.elf
+missing case for universal quantifier
+
+s's_forall : s'_comp (s_forall S1) (gl_forall GL1) (s'_forall S'1)
+	      <- {a:i} s'_comp (S1 a) (GL1 a) (S'1 a).
+
+----------------------------------------------------------------------
+Twelf.chatter := 1;
+Twelf.make "examples/church-rosser/sources.cfg";
+Twelf.make "examples/cut-elim/sources.cfg";
+Twelf.make "examples/handbook/sources.cfg";
+----------------------------------------------------------------------
+From: "Carsten Schuermann" <carsten@cs.yale.edu>
+To: "Frank Pfenning" <fp@cs.cmu.edu>
+Subject: Re: Progress
+Date: Fri, 9 Mar 2001 18:14:18 -0500
+
+Hi Frank:
+
+Sorry for answering only now.  I just got back and it is pretty busy here.
+Just to make sure that the table is correctly implemented, I send you the
+version we came up with ... Just to compare.
+
+    SBVar E    Const/BVar/PVar:  Add E to candidate set
+    Const    Const/BVar/PVar:    Empty local candidate set, fail
+    LVar     Const/BVar/PVar:    Empty local candidate set, fail
+    ...    EVAR:    Generate local constraints
+    EVAR    ...:    Skip
+    Param x    Const/BVar:    Empty local candidate set, fail
+    Param x    PVar:    (what did we agree on here?)
+
+Sketch of the algorithm:
+
+    1) Unify with every clause -> return cand. set
+    2) Q approximates Union(h_i)   the h_i's are local cand sets.
+    3) Heuristically: Choose candidate
+    4) Split cases:
+
+
+For your second question, I think we agreed on that we postpone the decision
+in form of constraints.
+
+Keep track of multiplicity
+    q : eq (lam _) (app _ _)
+    h : eq X X   (rewriting it to   h: eq X Y   with    X = Y)
+
+Another example was:
+    q :  eq (app E1 E2) E3
+    h : eq X X
+
+Does this still make sense?
+
+
+> I figured out the table, and the question I asked last time.
+>
+> The collection of candidates is now (almost) correct.  It will be correct
+when
+> I properly implement abstraction after splitting.
+
+We could reuse some splitting code, with metaabstract.  However the latest
+meta-abstract has parameter blocks.  Maybe the old splitting operation from
+the m2 directory?  It is reasonably clean.
+
+> There are two ways to do that: one is by using mode dependency order, the
+> other just do it from left-to-right.  If I do it left-to-right, than I
+need to
+> take special care that "ignore" arguments are indeed not matched during
+the
+> actual coverage checking.  If I do it in mode dependency order, I believe
+this
+> is redundant.
+
+What about output coverage? What are the "ignore" arguments?  Those that do
+not
+occur in a + position in the head?
+
+> Right now I am leaning towards just left-to-right.  The mode dependency
+> order seems to be a bigger pain than ensuring that at top-level,
+> the "ignore" arguments are never matched.
+
+I am not sure, how much effort that is to ensure that "ignore" arguments are
+never matched.  Programming in mode dependency order seems to be cleaner.
+However, in meta-abstract, I also just do the left-to-right traversal.  It
+worked there, so it should be fine.
+
+-- Carsten
+----------------------------------------------------------------------
+Sun Dec 16 18:12:17 2001 -f
+
+Hi Carsten,
+
+  here are some notes on the algorithm for output coverage.
+I am using as an example:
+
+tp : type.				%name tp A.
+arrow : tp -> tp -> tp.
+
+exp : tp -> type.			%name exp E x.
+lam : (exp A -> exp B) -> exp (arrow A B).
+app : exp (arrow A B) -> exp A -> exp B.
+
+cp : exp A -> exp A -> type.		%name cp D u.
+
+cp_lam : cp (lam E) (lam F)
+	  <- ({x:exp A} {y:exp A} cp x y -> cp (E x) (F y)).
+	     
+cp_app : cp (app E1 E2) (app F1 F2)
+	  <- cp E1 F1
+	  <- cp E2 F2.
+
+
+When examining a subgoal, we are in a context with two parts: the
+existential and the universal part.  We represent the universal
+part via explicit abstraction.  From cp_lam:
+
+{A:tp} {B:tp} {E:exp A -> exp B} {F:exp A -> exp B}
+|- {x:exp A} {y:exp A} {u:cp x y} cp (E x) (F y)
+
+Lets call this the coverage clause.  Since we don't factor different
+clauses for output coverage, the coverage clauses is unique.
+
+We next set up the initial coverage goal.  For this coverage goal the
+output arguments of the eventual atomic subgoal are maximally general
+(irrelevant arguments are replaced by underscore here for simplicity).
+Splittable variables are named V* and local parameters remain in the
+coverage goal.
+
+{A*:tp} {B*:tp} {G*:exp A* -> exp A* -> exp B*}
+?- {x:exp A*} {y:exp A*} {u:cp x y} cp _ (G* x y)
+
+Now we perform matching as for input coverage: we check if
+the single coverage clause above covers the single coverage
+goal below.
+
+We instantiate A, B, E, F with new logical variables _A, _B, _E, _F that
+can depend on A*, B*, G* (modulo subordination) and match
+
+{A*:tp} {B*:tp} {G*:exp A* -> exp A* -> exp B*}
+?- {x:exp A} {y:exp A} {u:cp x y} cp (E x) (F y)
+   = {x:exp A*} {y:exp A*} {u:cp x y} cp _ (G* x y) : type
+
+In this case this fails because of dependencies, where G* is
+not suggested as a splitting candidate.
+
+If we modify our example slightly (e.g. cp (E x) (app (F1 y) (F2 y))
+in the subgoal), the G* would become a candidate.  In that case
+we split the goal
+
+{A*:tp} {B*:tp} {G*:exp A* -> exp A* -> exp B*}
+?- {x:exp A*} {y:exp A*} {u:cp x y} cp _ (G* x y)
+
+by instantiating A*, B*, G* with new EVars (but not x, y, u),
+enumerating all possibilities for G*, then abstracting to
+obtain, for example (among others):
+
+{A*:tp} {B1*:tp} {B2*:tp}
+{G1*:exp A* -> exp A* -> exp (arrow B1* B2*)}
+{G2*:exp A* -> exp A* -> exp B1*}
+?- {x:exp A*} {y:exp A*} {u:cp x y} cp _ (app (G1* x y) (G2* x y))
+
+Then we proceed as before, this time without candidates.
+
+The main generalization to the current situation is that coverage clauses
+and coverage goals are no longer atomic.
+
+I am not sure if this is sound and terminating for the second-order
+case, but it seems at least plausible.  I haven't consider the case
+where local assumptions again have subgoals, because some issues of
+quantifier alternation may come into play.
+
+One possibility would be to rule that out for the moment, giving
+an error message for orders >= 3, and just implement what I sketched
+above.
+
+What do you think?  Do you believe the development above?
+Do you have any ideas for orders >= 3?  I'll wait for your input
+before proceeding with the implementation.
+
+----------------------------------------------------------------------
+Output coverage for orders >= 3
+Sun Dec 23 11:04:20 2001 fp
+
+Example (from fp-examples/coverage/third.elf)
+
+   tp : type.				%name tp A.
+   arrow : tp -> tp -> tp.
+
+   exp : tp -> type.			%name exp E x.
+   lam : (exp A -> exp B) -> exp (arrow A B).
+   app : exp (arrow A B) -> exp A -> exp B.
+   callcc : (({C:tp} exp A -> exp C) -> exp A) -> exp A.
+
+   %block exp_var : some {A:tp} block {x:exp A}.
+   %block exp_cont : some {A:tp} block {k:{C:tp} exp A -> exp C}.
+   %worlds (exp_var | exp_cont) (exp _).
+
+   cp : exp A -> exp A -> type.		%name cp D u.
+
+   cp_lam : cp (lam E) (lam F)
+	     <- ({x:exp A} cp x x -> cp (E x) (F x)).
+
+   cp_app : cp (app E1 E2) (app F1 F2)
+	     <- cp E1 F1
+	     <- cp E2 F2.
+
+   cp_callcc : cp (callcc E) (callcc F)
+		<- ({k:{C:tp} exp A -> exp C}
+		      ({C:tp} {H:exp A} {H':exp A} cp (k C H) (k C H') <- cp H H')
+		      -> cp (E k) (F k)).
+
+   %mode cp +E -F.
+   %block cp_var : some {A:tp} block {x:exp A} {u:cp x x}.
+   %block cp_cont : some {A:tp} block {k:{C:tp} exp A -> exp C}
+		    {w:{C:tp} {H:exp A} {H':exp A} cp (k C H) (k C H') <- cp H H'}.
+   %worlds (cp_var | cp_cont) (cp E F).
+   %covers cp +E -F.
+   %total E (cp E _).
+
+First-layer output coverage of cp_callcc:
+
+  Output coverage: cp_callcc
+  ?- {A1:tp} {E1:({C:tp} exp A1 -> exp C) -> exp A1}
+	{E2:({C:tp} exp A1 -> exp C) -> exp A1}
+	|- {k:{C:tp} exp A1 -> exp C}
+	      ({C:tp} {H:exp A1} {H':exp A1} cp H H' -> cp (k C H) (k C H'))
+		 -> cp (E1 k) (E2 k).
+                              |----|
+  Covered
+
+Second-layer output coverage would involve:
+
+  ?- {A1:tp} {E1:({C:tp} exp A1 -> exp C) -> exp A1}
+	{E2:({C:tp} exp A1 -> exp C) -> exp A1}
+	|- {k:{C:tp} exp A1 -> exp C}
+	      ({C:tp} {H:exp A1} {H':exp A1} cp H H').
+                                                 |-|
+and also (?)
+
+  ?- {A1:tp} {E1:({C:tp} exp A1 -> exp C) -> exp A1}
+	{E2:({C:tp} exp A1 -> exp C) -> exp A1}
+	|- {C:tp} exp A1.
+
+except exp A1 is never a subgoal and has no mode.
+----------------------------------------------------------------------
+Fri, 04 Jan 2002 16:13:28 -fp
+
+> > 1. I convinced myself that the violation of the unification invariant
+> > in output coverage is OK, primarily because it is OK to call
+> > unification with two objects of only approximately equal type.
+> > The other reason is that the type of each coverage goal is always
+> > an instance of the type of the coverage clause in output
+> > coverage.
+> 
+> Is the problem here that on type may contain EVars and the other
+> doesn't?   Hopefully you are right.  As we now, these things can be come
+> very tricky.
+
+For input coverage, we have the invariant that no input argument
+ever depends on an output argument.  So when we match input arguments
+to determine if a case is covered, the two terms have the same type,
+even if we ignore (as we do) all output arguments.
+
+For output coverage, we would like to ignore the input arguments
+and just match the output arguments to see if a case is covered.
+However, the output arguments DO depend on the input arguments.
+
+So at first I simply also matched the input arguments.  In principle,
+this should never fail, because originally the cover goal is a
+generalization of the cover clause by replacing the output arguments
+with a free variable, leaving all input arguments the same.  When we
+split in the cover goal, the variables in the cover goal are only
+instantiated, and thereby should remain an instance of the cover clause.
+
+Unfortunately, because of constraints, unification sometimes fails to
+realize that this is the case.  So coverage checking failed because even
+matching of non-patterns is incomplete.
+
+So I simply removed the matching on input arguments.  This means we will
+sometimes unify two output arguments whose types have not previously
+been unified, although we always know that one is an instance of the
+other.  Kevin and I convinced ourselves that in the case of matching,
+this should remain sound: if matching succeeds, then by using the
+existing (although not computing) match in the index arguments, the two
+terms must always be identical.
+
+In the end I couldn't see any other solution.
+
+Hope this makes sense...
+  - Frank
+----------------------------------------------------------------------
+Fri Nov 22 22:38:45 2002 -fp
+function coverageCheckCases
+
+Recall:
+
+G |- U : V   G' |- s : G
+------------------------
+G' |- U[s] : V[s]
+
+
+---------------------------
+G,x1:A1,...,xn:An |- ^n : G
+
+G' |- s : G   G' |- U : A[s]   (since G |- A : type, G' |- A[s] : type)
+----------------------------
+G' |- U.s : G,x:A
+
+Non-dependent example:
+
+coverageCheckCases (Cs, G) where
+G  = x : nat
+Cs =     . |- (z/x) : (x:nat)   [1]
+     y:nat |- (sy/x) : (x:nat)  [2]
+
+To check: for every . |- r : G
+          there exists k and  . |- t : Gk such that  r = sk o t 
+
+Approach: Build  H0 |- r0 : G  for H0 = G
+          Determine if there is Gk |- sk : G
+          such that r0 = sk o t for some H0 |- t : Gk
+
+Determine candidates in r0 (H0)
+Split candidate to construct a set of r1s and H1's and for each:
+          H1 |- r1 : H0  and  H1 |- r0 o r1 : G
+          Determine if there is Gk |- sk : G
+          such that r1 = sk o t for some H1 |- t : Gk
+
+Etc.
+------------------------------
+Back to example:
+G = x:nat
+H0 = x':nat  [contains splittable variables]
+r0 = x'/x      
+with x:nat |- (x/x) : x:nat
+
+Match    H0 |- (z/x) >= (x'/x) : G
+         Clash z <> x' [constant / splittable var], splitting candidate x'
+
+Match    H0 |- (sY/x) >= (x'/x) : G
+         Clash s <> x' [constant / splittable var], splitting candidate x'
+
+Split x':nat.  Two subgoals
+
+[a] r1 = z/x', H1 = . where . |- (z/x') : (x':nat)
+    r0 o r1 = z/x  where   . |- (z/x) : G
+
+Match  H1 |- (z/x) >= (z/x) : G
+       Success.
+
+[b] r1 = sx''/x', H1 = x'':nat  where x'':nat |- (sx''/x') : (x':nat)
+    r0 o r1 = sx''/x  where   x'':nat |- (sx''/x) : G
+
+Match  H1 |- (z/x) >= (sx''/x) : G
+       Fails [constant / constant clash], no splitting candidates
+
+Match  H1 |- (sY/x) >= (sx''/x) : G
+where  H1 |- Y : nat
+       Success.
+
+Coverage satisfied.
+------------------------------
+Functions:
+init (G) = (H0, r0)  such that  H0 |- r0 : G
+[eta-expanded identity]
+
+-- with spines:  H0 |- R0 : {{G}} a >> a with H0 = G0
+
+evarInst (Hi, Gk) = (X1/x1,...,Xn/xn) = tk,  ((Hi)) |- tk : Gk
+where Hi |- Xi : Ai[..]  if Gk = x1:A1,...,xn:An
+
+-- with spines: 
+   each clause is translated from  Gk |- sk : G
+   to  Gk |- Sk : {{G}} a >> a
+
+match (Hi, sk[tk], ri) = success or splitting candidates (indices into Hi)
+
+-- with spines:
+   match (Hi, Sk[tk], Ri)
+
+split (Hi, k) = [(Hi+1/1 |- ri+1/1),...,(Hi+1/1 |- ri+1/m)]
+
+-- with spines: identical

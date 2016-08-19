@@ -1,0 +1,384 @@
+% The HOL-Nuprl connection.
+% A formalziation of Nuprl.
+% Author: Carsten Schuermann, Mark-Oliver Stehr.
+
+integer : type.
+z: integer.
+s : integer -> integer.
+0 = z.
+1 = s z.
+>= : integer -> integer -> type.  %infix right 11 >=.
+0ge0 : 0 >= 0.
+1ge0 : 1 >= 0.
++ge1 : N >= M -> (s N) >= (s M). 
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Terms
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+n-tm : type.				
+
+uni : integer -> n-tm.
+
+app : n-tm -> n-tm -> n-tm.
+
+lam : (n-tm -> n-tm) -> n-tm.
+
+pi  : n-tm -> (n-tm -> n-tm) -> n-tm.
+
+->- = [S:n-tm] [T:n-tm] pi S [x] T.	%infix right 20 ->-.
+
+sigma  : n-tm -> (n-tm -> n-tm) -> n-tm.
+
+eq  : n-tm -> n-tm -> n-tm -> n-tm.     
+
+!*!  = [N][T] eq N N T.		%infix left 18 !*!.
+
++   : n-tm -> n-tm -> n-tm.		%infix right 19 +.
+
+inl : n-tm -> n-tm.
+
+inr : n-tm -> n-tm.
+
+decide : n-tm -> (n-tm -> n-tm) -> (n-tm -> n-tm) -> n-tm.
+
+void : n-tm. 
+
+any : n-tm -> n-tm.
+
+unit : n-tm. 
+
+bullet : n-tm.
+
+pair : n-tm -> n-tm -> n-tm.
+
+fst  : n-tm -> n-tm.
+
+snd  : n-tm -> n-tm.
+
+axiom : n-tm.
+
+set : n-tm -> (n-tm -> n-tm) -> n-tm.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+!- : n-tm  -> type.			%prefix 10 !-.
+
+equality-trans : !- eq M M' T -> !- eq M' M'' T -> !- eq M M'' T.
+
+equality-form  : !- (eq M N T) !*! (uni K)
+		  <- !- T !*! (uni K)
+		  <- !- M !*! T
+		  <- !- N !*! T.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability (Axiom)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+ax-intro : !- axiom !*! (M !*! T)
+	    <- !- M !*! T.
+
+ax-elim  : !- T
+	    <- !- _ !*! T.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability (Function)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+fun-form : !- (pi S T) !*! (uni K)
+	    <- ({x:n-tm} !- x !*! S -> !- (T x) !*! (uni K))
+	    <- !- S !*! (uni K).
+
+fun-intro: !- (lam M) !*! (pi S T)
+	    <- ({x:n-tm} !- x !*! S -> !- (M x) !*! (T x))
+	    <- !- S !*! (uni K). 
+
+fun-elim : !- (app M N) !*! (T N)
+	    <- !- N !*! S
+	    <- !- M !*! (pi S T).
+
+fun-xi1   : !- eq (lam M) (lam N) (pi S T)
+	    <- !- S !*! (uni K)
+	    <- ({x:n-tm} !- x !*! S -> !- eq (M x) (N x) (T x)).
+
+fun-beta : !- eq (app (lam M) N) (M N) (T N)	    
+	    <- !- N !*! S 
+	    <- ({x:n-tm} !- x !*! S  -> !- (M x) !*! (T x)).
+
+fun-ext  : !- eq M N (pi S T)
+	    <- !- M !*! (pi S T)
+	    <- !- N !*! (pi S T)
+	    <- ({x:n-tm} !- x !*! S -> !- eq (app M x) (app N x) (T x)).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability (Sum)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+sum-form : !- (S + T) !*! (uni K)
+	      <- !- S !*! (uni K)
+	      <- !- T !*! (uni K).
+
+sum-inl : !- (inl M) !*! (S + T)
+	     <- !- T !*! (uni K)
+	     <- !- M !*! S.
+
+sum-inr : !- (inr M) !*! (S + T)
+	     <- !- M !*! T
+	     <- !- S !*! (uni K).
+
+sum-decide :  !- (decide M N1 N2) !*! (T M)
+	     <- ({x:n-tm} !- x !*! S2 -> !- (N2 x) !*! T (inr x))
+	     <- ({x:n-tm} !- x !*! S1 -> !- (N1 x) !*! T (inl x))
+	     <- !- M !*! S1 + S2
+	     <- ({x:n-tm} !- x !*! (S1 + S2) -> !- T x !*! uni K).
+
+sum-ell : !- eq (decide (inl N) N1 N2) M (T (inl N))
+	    <- !- eq (N1 N) M (T (inl N))
+	    <- ({x:n-tm} !- x !*! S2 -> !- (N2 x) !*! T (inr x))
+	    <- ({x:n-tm} !- x !*! S1 -> !- (N1 x) !*! T (inl x))    
+	    <- ({x:n-tm} !- x !*! (S1 + S2) -> !- T x !*! uni K)
+	    <- !- S2 !*! uni K
+	    <- !- N !*! S1.
+
+sum-elr : !- eq (decide (inr N) N1 N2) M (T (inr N))
+	    <- !- eq (N2 N) M (T (inr N))
+	    <- ({x:n-tm} !- x !*! S2 -> !- (N2 x) !*! T (inr x))
+	    <- ({x:n-tm} !- x !*! S1 -> !- (N1 x) !*! T (inl x))    
+	    <- ({x:n-tm} !- x !*! (S1 + S2) -> !- T x !*! uni K)
+	    <- !- N !*! S2
+	    <- !- S1 !*! uni K.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability (Sigma)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+sig-form : !- (sigma S T) !*! (uni K)
+	    <- ({x:n-tm} !- x !*! S -> !- (T x) !*! (uni K))
+	    <- !- S !*! (uni K).
+
+sig-intro: !- (pair M N) !*! (sigma S T)
+	      <- !- N !*! (T M)
+	      <- !- M !*! S.
+
+sig-fst : !- (fst M) !*! S
+	    <- !- M !*! (sigma S T).
+
+sig-snd : !- (snd M) !*! (T (fst M))
+	    <- !- M !*! (sigma S T).
+
+sig-xi   : !- eq (pair M N) (pair M' N') (sigma S T)
+	    <- !- eq M M' S
+	    <- !- eq N N' (T M).
+
+sig-redfst : !- eq (fst (pair M N)) M S
+		<- !- M !*! S 
+		<- ({x:n-tm} !- x !*! S  -> !- N !*! (T x)).
+
+sig-redsnd : !- eq (snd (pair M N)) N (T M)
+		<- !- M !*! S 
+		<- ({x:n-tm} !- x !*! S  -> !- N !*! (T x)).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability (Set)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+set-form : !- (set T P) !*! (uni K)
+	    <- ({x:n-tm} !- x !*! T -> !- P x !*! uni K)
+	    <- !- T !*! (uni K).
+
+set-intro : !- M !*! (set T P)
+	     <- !- M !*! T
+	     <- !- P M
+	     <- ({x:n-tm} !- x !*! T -> !- P x !*! uni K).
+
+set-elem : !- M !*! T
+	    <- !- M !*! (set T P)
+            <- ({x:n-tm} !- x !*! T -> !- P x !*! uni K).
+
+set-prop : !- (P M)
+	    <- !- M !*! (set T P)
+	    <- ({x:n-tm} !- x !*! T -> !- P x !*! uni K).
+		      
+set-equality: !- eq (set T P) (set T' P') (uni K)
+	       <- !- eq T T' (uni K)
+	       <- ({x:n-tm} !- x !*! T -> !- P x -> !- P' x)
+	       <- ({x:n-tm} !- x !*! T -> !- P' x -> !- P x).
+	      
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability (Void)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+void-form : !- void !*! (uni 1).
+
+void-elim : !- (any N) !*! T
+	     <- !- N !*! void
+.% 	     <- !- T !*! uni K.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability (Unit)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+unit-form : !- unit !*! (uni 1).
+
+unit-intro: !- bullet !*! unit.
+
+unit-eq  : !- eq M N unit
+	     <- !- M !*! unit
+	     <- !- N !*! unit.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability (Universe)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+uni-form  : !- uni I !*! uni (s J)
+	     <- J >= I.
+
+uni-culm  : !- T !*! uni (s J)
+	     <- J  >= I
+	     <- !- T !*! uni I.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Derivability (Substitution)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+subst : !- eq M M' (P N)
+	 <- !- eq M M' (P N')
+	 <- !- eq N N' T
+	 <- ({x:n-tm} !- x !*! T -> !- P x !*! uni K).
+
+subst' : !- eq M M' (P N)
+	 <- !- eq M M' (P N')
+	 <- !- eq N' N T
+	 <- ({x:n-tm} !- x !*! T -> !- P x !*! uni K).
+
+teq  : !- eq S T (uni K) -> !- eq M N S -> !- eq M N T 
+     = [ND1] [ND2] subst' ([x][u] u) ND1 ND2. 
+
+teq'  : !- eq T S (uni K) -> !- eq M N S -> !- eq M N T 
+      = [ND1] [ND2] subst ([x][u] u) ND1 ND2. 
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Expression-level Booleans.
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+boolean = unit + unit.
+
+tt = inl bullet.
+
+ff = inr bullet.
+
+if = [M][M1][M2] decide M ([z] M1) ([z] M2).
+
+
+boolean-form : !- boolean !*! uni 1
+		= sum-form unit-form unit-form.
+
+boolean-tt : !- tt !*! boolean
+	     = sum-inl unit-intro (unit-form : !- unit !*! uni 1).
+
+boolean-ff : !- ff !*! boolean
+	     = sum-inr (unit-form : !- unit !*! uni 1) unit-intro.
+
+fact-tt : {M}{ND: !- M !*! unit} !- eq (inl M) tt boolean
+	      = [M][ND:!- M !*! unit] ax-elim (subst ([y][v] equality-form 
+				      (sum-inl unit-intro unit-form) 
+				      (sum-inl v unit-form) 
+				      (sum-form unit-form unit-form)) 
+			       (unit-eq unit-intro ND)
+			       (ax-intro (sum-inl unit-intro unit-form))).
+
+fact-ff : {M}{ND: !- M !*! unit} !- eq (inr M) ff boolean
+	      = [M] [ND:!- M !*! unit] ax-elim (subst ([y][v] equality-form 
+				      (sum-inr unit-form unit-intro) 
+				      (sum-inr unit-form v) 
+				      (sum-form unit-form unit-form)) 
+			       (unit-eq unit-intro ND)
+			       (ax-intro (sum-inr unit-form unit-intro))).
+
+boolean-decide : !- (decide M ([_] N1) ([_] N2)) !*! (T M)
+		  <- (!- N2 !*! T ff)
+		  <- (!- N1 !*! T tt)
+		  <- !- M !*! boolean
+		  <- ({x:n-tm} !- x !*! boolean -> !- T x !*! uni K)
+	       = [ND0] [ND] [ND1] [ND2] sum-decide ND0 ND 
+		  ([x] [u] subst ND0 (fact-tt x u) ND1)
+		  ([x] [u] subst ND0 (fact-ff x u) ND2).
+
+
+boolean-if: !- T !*! uni K -> !- M !*! boolean -> !- N1 !*! T -> !- N2 !*! T -> !- (if M N1 N2) !*! T
+          = [ND1:!- T !*! uni K] [ND2 : !- M !*! boolean] [ND3:!- _ !*! T] [ND4:!- _ !*! T] 
+	     boolean-decide ([_][_] ND1) ND2 ND3 ND4.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Type-level Booleans.
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+ntrue = unit.
+
+ntrue-form = unit-form.
+
+nfalse = void.
+
+nfalse-form = void-form.
+
+nP = [k] uni k.
+
+n/\ = [T] [S] sigma T [x] S.		%infix right 27 n/\.
+
+n/\-intro : !- M !*! S -> !- N !*! T -> !- (pair M N) !*! (sigma S  [x] T)
+          = [ND1: !- M !*! S]  [ND2 : !- N !*! T] sig-intro ND1 ND2. 
+
+n/\-form : !- S !*! (uni K) -> !- T !*! (uni K) -> !-  S n/\ T !*! (uni K)
+         = [ND1] [ND2] sig-form  ND1 ([_] [_] ND2).	    
+
+n/\-fst = sig-fst.
+
+n/\-snd = sig-snd.
+
+nall = [T] [S] pi T S.			
+
+nall-intro = fun-intro.
+
+nall-elim  = fun-elim.
+
+nex = [T] [S] sigma T S.		
+
+=n=> = [T] [S] pi T [x] S.		%infix right 26 =n=>.
+
+=n=>-intro = fun-intro.
+
+=n=>-elim  = fun-elim.
+
+=n=>-form : !- S !*! (uni K) -> !- T !*! (uni K) -> !-  S =n=> T !*! (uni K)
+         = [ND1] [ND2] fun-form  ND1 ([_] [_] ND2).
+
+n~ = [T] T =n=> nfalse.			%prefix 29 n~.
+
+n<=> = [T] [S] (T =n=> S) n/\ (T =n=> S).	%infix right 26 n<=>. 
+

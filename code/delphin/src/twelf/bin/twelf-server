@@ -1,0 +1,2 @@
+#! /bin/sh
+exec "/usr/bin/sml" @SMLload="/home/adam/delphin/src/twelf/bin/.heap/twelf-server" @SMLdebug=/dev/null

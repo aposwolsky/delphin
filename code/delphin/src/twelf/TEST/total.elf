@@ -1,0 +1,43 @@
+% Testing totality checking
+
+a : type.
+c : a.
+
+b : a -> a -> a -> type.
+
+%mode b +X *Y -Z.
+
+b1 : b X Y X.
+
+%worlds () (b X Y Z).
+% next line should fail
+% %total X (b X Y Z).
+
+o : type.
+
+a : o.
+b : o.
+
+
+pred : o -> type.
+
+pred_ : pred a.
+
+
+foo : {O:o} pred O -> type.
+%mode foo -O -D.
+
+foo_ : foo a pred_.
+
+%worlds () (foo _ _).
+%total {} (foo _ _).
+
+bar : {O} pred O -> type.
+%mode bar +O -D.
+
+bar_ : bar O D
+	<- foo O D.
+
+%worlds () (bar _ _).
+% Next line must fail
+% %total {} (bar _ _).

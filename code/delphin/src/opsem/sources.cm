@@ -1,0 +1,11 @@
+Library
+  signature DELPHIN_OPSEM
+  structure DelphinOpsem
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../twelf/src/lambda/sources.cm
+  ../elaboration/sources.syntax.cm
+  opsem.sig
+  opsem.fun

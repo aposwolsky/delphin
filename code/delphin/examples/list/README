@@ -1,0 +1,4 @@
+(* Merge sort *)
+(* Author: Adam Poswolsky, Carsten Schuermann *)
+
+list.d implements the standard merge sort operation in Delphin.

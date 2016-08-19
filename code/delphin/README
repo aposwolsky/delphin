@@ -1,0 +1,6 @@
+To Install just do "make".
+In order to compile under SML, you may also do:
+CM.make "src/sources.cm" .
+You can then access the frontend by doing "Delphin.top() "
+
+

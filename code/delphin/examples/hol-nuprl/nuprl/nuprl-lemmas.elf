@@ -1,0 +1,487 @@
+% Meta-theoretic properties of the HOL-Nuprl connection:
+% Nuprl lemmas
+% Author: Carsten Schuermann, Mark-Oliver Stehr.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lemma [eq-formation] : !- all T:uni1 all a:T,b:T. !- a =b= b !*! boolean
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+=b=-form : !- T !*! uni 1 -> !- M !*! T -> !- N !*! T -> !- =b= T M N !*! boolean
+	 = [ND][ND1][ND2] fun-elim 
+	    (fun-elim 
+	       (fun-intro ND
+		  [x][u] fun-intro ND 
+		  [y][v] v-form (equality-form v u ND))
+	       ND1)
+	    ND2.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lemma [Reflexivity] : !- all T:uni1 all x:T.  x = x in T
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+refleq : !- _ !*! nall (uni 1) [t] nall t [x] eq x x t
+	  = nall-intro (uni-form (+ge1 0ge0)) [t] [u] 
+	      nall-intro u [x] [v] (ax-intro v).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lemma [Symmetry] : !- all T:uni1 all x: T. all y:T x = y in T then y = x in T
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+symm : !- _ !*! nall (uni 1) [t]  nall t [x] nall t [y] eq x y t =n=> eq y x t
+	   =  nall-intro (uni-form (+ge1 0ge0)) [t] [u] 
+	      nall-intro u [_] [v1] 
+	      nall-intro u [_] [v2] 
+	      =n=>-intro (equality-form v2 v1 u) [_][w1]
+	      subst' ([_][w2] equality-form v1 w2 u) (ax-elim w1) (ax-intro v1).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Fact 1 : If ff = tt then exists a term P, s.t. !- P in ^ff.
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+fact0 : !- eq (decide (inl bullet) ([x:n-tm] unit) ([x:n-tm] void)) unit (uni 1)
+      = (sum-ell unit-intro 
+	   (uni-culm unit-form (+ge1 0ge0))
+	   ([_][_] uni-form (+ge1 0ge0)) 
+	   ([_] [_] unit-form) 
+	   ([_] [_] void-form) unit-form) .
+
+fact1 : !- eq ff tt boolean -> !- bullet !*! decide ff ([_:n-tm] unit) ([_:n-tm] void)
+      = [ND:!- eq ff tt boolean]
+	 subst ([_][u] sum-decide ([_][_] uni-form (+ge1 0ge0)) u 
+		  ([_][_] unit-form)  
+		  ([_][_] void-form))
+	 ND (teq' fact0 unit-intro).
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Fact 2 : ^ ff = void.
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+fact2 : !- eq (decide ff ([_:n-tm] unit) ([_:n-tm] void)) void (uni 1)
+      =  (sum-elr (uni-culm unit-form (+ge1 0ge0))
+	    unit-intro 
+	    ([_][_] uni-form (+ge1 0ge0)) 
+	    ([_][_] unit-form) 
+	    ([_][_] void-form) void-form).
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Fact 3 : If ff = tt then exists a term P, s.t. !- P in void.
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+fact3 : !- eq ff tt boolean -> !- bullet !*! void
+      = [ND:!- eq ff tt boolean] teq fact2 (fact1 ND).
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Fact 4 : !- all b:boolean. b = tt in boolean => ^b
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+fact4 : !- _ !*! nall boolean [x] (eq x tt boolean) =n=> ^ x
+	 = nall-intro boolean-form [t] [u]
+	    boolean-decide ([_] [v] =n=>-form 
+			      (equality-form boolean-tt v boolean-form) 
+			      (^-form _ v)) u 
+	    (=n=>-intro (equality-form boolean-tt boolean-tt boolean-form) 
+	       [_] [_] teq' fact0 unit-intro)
+	    (=n=>-intro (equality-form boolean-tt boolean-ff boolean-form) 
+	       [_][u] teq' fact2 (subst ([_][_] void-form) u 
+				    (fact3 (ax-elim u)))).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Fact 8 : !- =p=> : boolean =n=> boolean =n=> boolean 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+fact8 : !- =p=> !*! boolean =n=> boolean =n=> boolean 
+	   = =n=>-intro boolean-form [x][u] =n=>-intro boolean-form [y][v] 
+	      boolean-if (boolean-form) u v (boolean-tt).
+
+cor81 : !- ff =b=> ff !*! boolean
+	 = fun-elim (fun-elim fact8 boolean-ff) boolean-ff.
+
+cor82 : !- ff =b=> tt !*! boolean
+	 = fun-elim (fun-elim fact8 boolean-ff) boolean-tt.
+
+cor83 : !- tt =b=> tt !*! boolean
+	 = fun-elim (fun-elim fact8 boolean-tt) boolean-tt.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Fact 5 : !- all b:boolean. ^ b in P1
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+fact5 : !- _ !*! nall boolean [x] ^ x !*! nP 1
+	 = nall-intro boolean-form [_] [u] 
+	    (ax-intro 
+	       (boolean-if (uni-form (+ge1 0ge0)) u ntrue-form nfalse-form)).
+
+cor51 : !- ^ ff !*! nP 1 
+	 = ax-elim (nall-elim fact5 boolean-ff).
+
+cor52 : !- ^ tt !*! nP 1 
+	 = ax-elim (nall-elim fact5 boolean-tt).
+
+cor53 : !- ^ (ff =b=> ff) !*! nP 1 
+	 = ax-elim (nall-elim fact5 cor81).
+
+cor54 : !- ^ (ff =b=> tt) !*! nP 1 
+	 = ax-elim (nall-elim fact5 cor82).
+
+cor55 : !- ^ (tt =b=> tt) !*! nP 1 
+	 = ax-elim (nall-elim fact5 cor83).
+
+%abbrev
+fact10 : !- _ !*! ^ tt 
+	  = subst ([x][u] u) fact0 unit-intro.
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Fact 6 : !- all b:boolean. ^ b => (b = tt in boolean) 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+fact6 : !- _ !*! nall boolean [x] (^ x) =n=> (eq x tt boolean)
+      = nall-intro boolean-form [_] [u]
+	 boolean-decide ([_] [v] =n=>-form  (^-form _ v) 
+			   (equality-form boolean-tt v boolean-form)) u
+	 (=n=>-intro (ax-elim (nall-elim fact5 boolean-tt)) 
+	    [_] [_] ax-intro boolean-tt)
+	 (=n=>-intro (ax-elim (nall-elim fact5 boolean-ff)) 
+	    [_] [v] void-elim (teq fact2 v)).
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Fact 7 : !- all P. v P in B 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+law4 : !- _ !*! nall (nP 1) [p] v p !*! boolean
+     = nall-intro (uni-form (+ge1 0ge0)) 
+	[_] [u] ax-intro 
+	(sum-decide ([_][_] boolean-form) 
+	   (fun-elim inh-intro u) 
+	   ([_][_] boolean-tt)
+	   [_][_] boolean-ff).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% law 5 : !- all P. ^ (v P) => P
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+law5_goal : {P:n-tm} {ND: !- P !*! nP 1} {M:n-tm}
+	     !- M !*! P + P ->- void ->
+	     !- (^ decide M ([_] tt) ([_] ff) =n=> P) !*! uni 1
+      = [P:n-tm][ND1: !- P !*! nP 1]
+	 [M:n-tm] [ND2 : !- M !*! P + P ->- void]
+	 =n=>-form (^-form _ 
+		      (sum-decide ([_][_] boolean-form) ND2 
+			 ([_] [_] boolean-tt) 
+			 [_] [_] boolean-ff)) ND1.
+
+
+law5 : !- _ !*! nall (nP 1) [p]  (^ (v p)) =n=> p
+     = nall-intro (uni-form (+ge1 0ge0)) [p] [u] 
+	sum-decide  ([x] [v] law5_goal p u x v)
+	(fun-elim inh-intro u)
+	([_][v] subst ([_][w] =n=>-form (ax-elim (fun-elim fact5 w)) u)
+	   (sum-ell v (=n=>-form u void-form) ([_][_] boolean-form) 
+	      ([_] [_] boolean-tt) 
+	      ([_] [_] boolean-ff) boolean-tt)
+	   (fun-intro (ax-elim (fun-elim fact5 boolean-tt)) ([_][_] v)))
+	([_][v] subst ([_][w] =n=>-form (ax-elim (fun-elim fact5 w)) u)
+	   (sum-elr u v ([_][_] boolean-form) ([_][_] boolean-tt) ([_][_] boolean-ff) boolean-ff)
+	   (subst ([_][w] =n=>-form w u) 
+	      fact2 
+	      (fun-intro void-form ([_][w] void-elim w)))).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% law 6 : !- all P:Pi P => ^ (v P) 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+law6_goal : {M:n-tm}  !- M !*! _ -> !- ^ decide M ([_] tt) ([_] ff) !*! uni 1
+      = [M:n-tm] [ND : !- M !*! P + P ->- void]
+	 ^-form _ (sum-decide 
+		     ([_][_] boolean-form) ND 
+		     ([_] [_] boolean-tt) 
+		     [_] [_] boolean-ff).
+
+
+law6 : !- _ !*! nall (nP 1) [p]  p =n=> (^ (v p))
+     = nall-intro (uni-form (+ge1 0ge0)) [t] [u] 
+	=n=>-intro  u [t'] [u'] 
+	sum-decide ([x] [v] law6_goal x v)
+	(fun-elim inh-intro u) 
+	([x][v] subst ([t:n-tm][u: !- t !*! boolean] ax-elim (fun-elim fact5 u))
+	   (sum-ell v (=n=>-form u void-form)
+	      ([_][_] boolean-form) 
+	      ([_][_] boolean-tt) 
+	      ([_][_] boolean-ff) boolean-tt) 
+	   (teq' fact0 unit-intro))
+	([x][v] subst ([t:n-tm][u: !- t !*! boolean] ax-elim (fun-elim fact5 u))
+	   (sum-elr u v ([_][_] boolean-form) ([_][_] boolean-tt) ([_][_] boolean-ff) boolean-ff)
+	   (teq' fact2 (fun-elim v u'))).
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% disch_lemma : !- all p, q. (^ p =n=> ^ q) =n=> ^ (p =b=> q)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+lemma-0 : !-  _ !*! eq (tt =b=> tt) tt boolean 
+	   = subst ([x] [u:!- x !*! pi boolean [_] boolean] 
+		       equality-form boolean-tt (fun-elim u boolean-tt) 
+		       boolean-form) 
+		 (fun-beta 
+		    ([x][u] =n=>-intro boolean-form [y][v] 
+		       boolean-if boolean-form u  v boolean-tt)
+		    boolean-tt)
+	      (subst ([x] [u:!- x !*! boolean] equality-form boolean-tt 
+			 u 
+			 boolean-form)		 
+		    (fun-beta 
+		       ([y][v:!- y !*! boolean] boolean-if boolean-form boolean-tt v boolean-tt)
+		       boolean-tt)
+		 (subst ([z][w] equality-form boolean-tt w boolean-form)
+		    (sum-ell unit-intro unit-form ([_][_] boolean-form) ([_][_] boolean-tt) ([_][_] boolean-tt) boolean-tt)
+		    (ax-intro boolean-tt))).
+
+
+lemma-1 : !-  _ !*! eq (ff =b=> tt) tt boolean 
+	   = subst ([x] [u:!- x !*! pi boolean [_] boolean] 
+		       equality-form boolean-tt (fun-elim u boolean-tt) 
+		       boolean-form)
+		 (fun-beta 
+		    ([x][u] =n=>-intro boolean-form [y][v] 
+		       boolean-if boolean-form u v boolean-tt)
+		    boolean-ff)
+	      (subst ([x] [u:!- x !*! boolean] equality-form boolean-tt 
+			 u 
+			 boolean-form)
+		    (fun-beta 
+		       ([y][v:!- y !*! boolean] boolean-if boolean-form boolean-ff v boolean-tt)
+		       boolean-tt)
+		 (subst ([z][w] equality-form boolean-tt w boolean-form)
+		    (sum-elr unit-form unit-intro  
+		       ([_][_] boolean-form) 
+		       ([_][_] boolean-tt) 
+		       ([_][_] boolean-tt) boolean-tt)
+		    (ax-intro boolean-tt))).
+
+lemma-3 : !-  _ !*! eq (ff =b=> ff) tt boolean 
+	   = subst ([x] [u:!- x !*! pi boolean [_] boolean] 
+		       equality-form boolean-tt (fun-elim u boolean-ff) 
+		       boolean-form) 
+		 (fun-beta 
+		    ([x][u] =n=>-intro boolean-form [y][v] 
+		       boolean-if boolean-form u v boolean-tt)
+		    boolean-ff)
+	      (subst ([x] [u:!- x !*! boolean] equality-form boolean-tt 
+			 u 
+			 boolean-form)
+		    (fun-beta 
+		       ([y][v:!- y !*! boolean] boolean-if boolean-form boolean-ff v boolean-tt)
+		       boolean-ff)
+		 (subst ([z][w] equality-form boolean-tt w boolean-form)
+		    (sum-elr unit-form unit-intro 
+		       ([_][_] boolean-form) 
+		       ([_][_] boolean-ff) 
+		       ([_][_] boolean-tt) boolean-tt)
+		    (ax-intro boolean-tt))).
+
+lemma0 : !- _ !*! (if (tt =b=> tt) ntrue nfalse)
+	  = subst ([x][u] ^-form x u) (ax-elim lemma-0)
+	     fact10.
+
+lemma1 : !- _ !*! (if (ff =b=> tt) ntrue nfalse)
+	  = subst ([x][u] ^-form x u) (ax-elim lemma-1)
+	     fact10.
+
+lemma3 : !- _ !*! (if (ff =b=> ff) ntrue nfalse)
+	  = subst ([x][u] ^-form x u) (ax-elim lemma-3)
+	     fact10.
+
+
+% Difficult case.
+
+lemma-2 : !-  _ !*! eq (tt =b=> ff) ff boolean 
+	   = subst ([x] [u:!- x !*! pi boolean [_] boolean] 
+		       equality-form boolean-ff (fun-elim u boolean-ff) 
+		       boolean-form)
+		 (fun-beta 
+		    ([x][u] =n=>-intro boolean-form [y][v] 
+		       boolean-if boolean-form u v boolean-tt)
+		    boolean-tt)
+	      (subst ([x] [u:!- x !*! boolean] equality-form boolean-ff 
+			 u 
+			 boolean-form)
+		    (fun-beta 
+		       ([y][v:!- y !*! boolean] boolean-if boolean-form boolean-tt v boolean-tt)
+		       boolean-ff)
+		 (subst ([z][w] equality-form boolean-ff w boolean-form)
+		    (sum-ell unit-intro unit-form
+		       ([_][_] boolean-form) 
+		       ([_][_] boolean-ff) 
+		       ([_][_] boolean-tt) boolean-ff)
+		    (ax-intro boolean-ff))).
+
+
+lemma-2' : {N:n-tm} !- N  !*! if tt ntrue nfalse =n=> if ff ntrue nfalse -> !- _ !*! void
+	  =  [_][ND] subst' ([x][u] u) fact2 (fun-elim ND fact10) .
+
+lemma2 : {N:n-tm} !- N !*! if tt ntrue nfalse =n=> if ff ntrue nfalse
+	  -> !- _ !*! (if (tt =b=> ff) ntrue nfalse)
+	  = [_][ND]  subst ([x][u] ^-form x u) (ax-elim lemma-2)
+	     (subst ([x][u] u) fact2
+		(subst' ([x][u] u) fact2 (fun-elim ND fact10))).
+
+disch_goal : {N} !- N !*! boolean 
+	      -> {M} !- M !*! boolean 
+	      -> !- (^ M =n=> ^ N) =n=> ^ (M =b=> N) !*! uni 1
+	   = [N][ND1: !- N !*! boolean][M] [ND2 : !- M !*! boolean ] 
+	      =n=>-form (=n=>-form (^-form M ND2) (^-form N ND1)) 
+	      (^-form _ (=b=>-form M ND2 N ND1)). 
+
+disch_lemma : !- _ !*! nall boolean [p] nall boolean [q]
+	          (^ p =n=> ^ q) =n=> ^ (p =b=> q)
+	       = nall-intro boolean-form [p] [u]
+		  nall-intro boolean-form [q] [v]
+		  boolean-decide ([x] [w] disch_goal q v x w) u
+		  %{ q = tt  }%
+		   (boolean-decide ([y][w] disch_goal y w tt boolean-tt) v
+		      %{p = tt }%
+		      (=n=>-intro (=n=>-form (^-form tt boolean-tt) 
+					    (^-form tt boolean-tt)) 
+			 [t] [u] lemma0)
+		      %{p = ff }%
+		      (=n=>-intro (=n=>-form (^-form tt boolean-tt) 
+					    (^-form ff boolean-ff)) 
+			 [t] [u]  lemma2 t u))
+		  %{ q = ff  }%
+		   (boolean-decide ([y][w] disch_goal y w ff boolean-ff) v
+		      %{p = tt }%
+		      (=n=>-intro (=n=>-form (^-form ff boolean-ff) 
+					    (^-form tt boolean-tt)) 
+			 [t] [u] lemma1)
+		      %{p = ff }%
+		      (=n=>-intro (=n=>-form (^-form ff boolean-ff) 
+					    (^-form ff boolean-ff)) 
+			 [t] [u] lemma3)).
+
+
+
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% mp_lemma : !- all p, q. ^ (p =b=> q) =n=> (^ p n => ^q)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+mp_goal : {N} !- N !*! boolean 
+	   -> {M} !- M !*! boolean 
+	   -> !- ^ (M =b=> N) =n=> (^ M =n=> ^ N) !*! uni 1
+      = [N][ND1][M][ND2] 
+	 =n=>-form (^-form _ (=b=>-form M ND2 N ND1))
+	 (=n=>-form (^-form M ND2) (^-form N ND1)). 
+
+mp_lemma : !- _ !*! nall boolean [p] nall boolean [q]
+	          (^ (p =b=> q)) =n=> (^ p =n=> ^ q)
+	       = nall-intro boolean-form [p] [u]
+		  nall-intro boolean-form [q] [v]
+		  boolean-decide ([x][w] mp_goal q v x w) u
+		  %{ q = tt  }%
+		   (boolean-decide ([y] [w] mp_goal y w tt boolean-tt) v
+		      %{p = tt }%
+		      (=n=>-intro cor55 [_] [_] =n=>-intro cor52 [_] [_] fact10)
+		      %{p = ff }%
+		      (subst ([t][u] =n=>-form (^-form t u) (=n=>-form cor52 cor51)) 
+			 (ax-elim lemma-2)
+			 (=n=>-intro cor51 ([t][u] =n=>-intro cor52 [_][_] u))))
+		  %{ q = ff  }%
+		   (boolean-decide ([y] [w] mp_goal y w ff boolean-ff) v
+		      %{p = tt }%
+		      (=n=>-intro cor54 [_] [_] =n=>-intro cor51 [_] [_] fact10)
+		      %{p = ff }%
+		      (=n=>-intro cor53 [_] [_] =n=>-intro cor51 [t][u] u)).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% beta_lemma : !- all a, b. a = b !*! T  =n=> (^ a =b= T  b)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+beta_lemma:  !- _ !*! 
+	         nall (uni 1) [t] 
+	           nall t [x] nall t [y]
+	             eq x y t =n=>  ^ =b= t x y
+	     = nall-intro (uni-form (+ge1 0ge0))
+		[_] [u] nall-intro u [_][v1] nall-intro u [_][v2]
+		subst ([x][w] =n=>-form (equality-form v2 v1 u) 
+			  (^-form x w)) 
+		(ax-elim 
+		   (subst ([y] [v3:!- y !*! pi _ [_] boolean] equality-form (v-form (equality-form v2 v1 u)) 
+			      (fun-elim v3 v2) boolean-form ) 
+		      (fun-beta ([x1][u1] fun-intro u [x2][u2] v-form (equality-form u2 u1 u)) v1)
+		      (subst ([z][w] equality-form (v-form (equality-form v2 v1 u)) w  boolean-form)
+			 (fun-beta ([x2][u2] v-form (equality-form u2 v1 u)) v2)
+			 (ax-intro (v-form (equality-form v2 v1 u))))))
+		(nall-elim law6 (equality-form v2 v1 u)).
+
+
+			  
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Fact 7 : !- all T:uni 1. all t:T. ^ (=b= T t t)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+refl_lemma : !- _ !*! nall (uni 1) [t]  nall t [x] ^ (=b= t x x)
+	   = nall-intro (uni-form (+ge1 0ge0)) [t][u] 
+	      nall-intro u [x] [v] 
+	      =n=>-elim (nall-elim (nall-elim (nall-elim beta_lemma u) v) v) 
+	        (nall-elim (nall-elim refleq u) v).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% beta_inverse : !- all a, b. (^ a =b= b) =n=> a = b !*! T
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+beta_inverse : !- _ !*! 
+		nall (uni 1) [t] 
+		nall t [x] nall t [y]
+		^ =b= t x y =n=> eq x y t
+		= nall-intro (uni-form (+ge1 0ge0))
+		   [_] [u] nall-intro u [_][v1] nall-intro u [_][v2] 
+		   subst ([x][w] =n=>-form (^-form x w) (equality-form v2 v1 u))
+		(ax-elim 
+		   (subst ([_] [v3] equality-form (v-form (equality-form v2 v1 u)) 
+			      (fun-elim v3 v2) boolean-form ) 
+		       (fun-beta ([x1][u1] fun-intro u [x2][u2] v-form (equality-form u2 u1 u)) v1)
+		      (subst ([_][w] equality-form (v-form (equality-form v2 v1 u)) w  boolean-form)
+			 (fun-beta ([x2][u2] v-form (equality-form u2 v1 u)) v2)
+			 (ax-intro (v-form (equality-form v2 v1 u))))))
+		   (nall-elim law5 (equality-form v2 v1 u)).
+
+
+
+		  
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% subst_lemma : !- all a,b:T. all p: T -> U (^ a =b= b) =n=> p a =n=> p b 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+subst_lemma : !- _ !*!	
+		nall (uni 1) [t] 
+		nall t [x] nall t [y] nall (t ->- uni 1) [z]
+		^ =b= t x y =n=> (app z x) =n=> (app z y)
+		= nall-intro (uni-form (+ge1 0ge0))
+		   [_] [u] nall-intro u [_][v1] nall-intro u [_][v2] 
+		   nall-intro (fun-form (uni-culm u (+ge1 1ge0)) [_] [_] uni-form (+ge1 1ge0)) [_][v3] 
+		   =n=>-intro (^-form _ (=b=-form u v1 v2)) [_] [v4] 
+		    subst' ([_] [u] =n=>-form (fun-elim v3 v1) (fun-elim v3 u)) 
+		    (ax-elim 
+		       (=n=>-elim 
+			  (nall-elim 
+			     (nall-elim 
+				(nall-elim
+				   beta_inverse 
+				   u) 
+				v1)
+			     v2)
+			  v4))
+		   (=n=>-intro (fun-elim v3 v1) [_][v] v).
+
+ 

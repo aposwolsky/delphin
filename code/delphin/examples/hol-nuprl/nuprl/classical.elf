@@ -1,0 +1,86 @@
+% The HOL-Nuprl connection.
+% Classical extension
+% Author: Carsten Schuermann, Mark-Oliver Stehr.
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Inhabitation.
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+inhabited : n-tm.
+
+inh-intro : !- inhabited !*! (pi (uni K) [x] x + (x ->- void)).
+
+inh = [T:n-tm] nex T [y] ntrue.
+
+arb = [T:n-tm] decide (app inhabited T) ([x] x) ([x] unit).
+
+arb-intro : {M:n-tm} {ND : !- M !*! (S !*! uni 1) n/\ inh S} !- arb S !*! S 
+	    = [M][ND] sum-decide ([_][_] ax-elim (n/\-fst ND)) 
+	       (fun-elim inh-intro (ax-elim (n/\-fst ND)))
+	       ([x] [u] u)
+	       ([x] [u] ax-elim (void-elim 
+				   (fun-elim u (sig-fst (sig-snd ND))))). 
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Translation of expression level Booleans to type level Booleans.
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+^ = [M:n-tm] if M ntrue nfalse.		%prefix 27 ^.
+
+^-form : {M:n-tm} !- M !*! boolean -> !- ^ M !*! uni 1
+       = [M:n-tm] [ND:!- M !*! boolean] 
+	  sum-decide ([_][_] uni-form (+ge1 0ge0)) ND
+	  ([_][_] unit-form) 
+	  ([_][_] void-form).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Translation of type level Booleans to expression level Booleans.
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+v = [P:n-tm] decide (app inhabited P) ([x] tt)  ([y] ff).
+
+v-form : !- M !*! uni K -> !- v M !*! boolean
+	= [ND:!- M !*! uni K] 
+	  sum-decide ([_] [_] boolean-form) (fun-elim inh-intro ND) 
+	  ([_][_] boolean-tt) 
+	  ([_][_] boolean-ff).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Nuprl's implication on Booleans 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+=p=> = lam [x] lam [y] if x y tt.
+=p=>-form = fun-intro boolean-form [x][u: !- x !*! boolean] 
+	     fun-intro boolean-form [y][v : !- y !*! boolean] 
+	     boolean-if boolean-form u v boolean-tt.
+
+=b=> = [M][N] app (app =p=> M) N.			%infix right 26 =b=>.
+
+=b=>-form = [M1][ND1:!- M1 !*! boolean] 
+	    [M2][ND2:!- M2 !*! boolean] 
+	    fun-elim (fun-elim =p=>-form ND1) ND2.
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Nuprl's polymorphic equality
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+=p= = [T:n-tm] lam [x] lam [y] v (eq x y T).
+
+=p=-form = [T][ND:!- T !*! uni K] fun-intro ND 
+	    [x][u] fun-intro ND 
+	    [y][v] v-form (equality-form v u ND).
+
+%abbrev
+=b= = [T][M][N] app (app (=p= T) M) N.	
+=b=-form = [T][ND:!- T !*! uni K] [M1][ND1:!- M1 !*! T] [M2][ND2:!- M2 !*! T]
+	     fun-elim (fun-elim (=p=-form T ND) ND1) ND2.
+
+

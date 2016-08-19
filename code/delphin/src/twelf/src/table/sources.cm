@@ -1,0 +1,34 @@
+Library
+  signature TABLE
+  structure StringHashTable
+  structure StringRedBlackTree
+  structure IntRedBlackTree
+  signature RING
+  structure Ring
+  signature QUEUE
+  structure Queue
+  signature SPARSE_ARRAY
+  structure SparseArray
+  signature SPARSE_ARRAY2
+  structure SparseArray2
+  functor HashTable
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../compat/sources.cm
+  table.sig
+  hash-table.sml
+  string-hash.sig
+  string-hash.sml
+  red-black-tree.fun
+  ring.sig
+  ring.sml
+  queue.sig
+  queue.sml
+  sparse-array.sig
+  sparse-array.fun
+  sparse-array2.sig
+  sparse-array2.fun  
+  table.sml
+

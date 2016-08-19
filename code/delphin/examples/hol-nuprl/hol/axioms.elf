@@ -1,0 +1,12 @@
+% The HOL-Nuprl connection.
+% A formalziation of HOL.
+% Author: Carsten Schuermann, Mark-Oliver Stehr.
+
+% HOL Axioms 
+
+bool-cases-ax  : |- all (\ [x:tm bool] x === true \/ x === false).
+imp-antisym-ax : |- all (\ [x:tm bool] 
+                           all (\ [y:tm bool] 
+                                  (x ==> y) ==> (y ==> x) ==> x === y)).
+eta-ax         : |- (\ [x] F @ x) === F.
+select-ax      : |- all (\ [P]  all (\ [x] P @ x ==>  P @ (the P))).

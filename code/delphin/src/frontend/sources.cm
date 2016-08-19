@@ -1,0 +1,44 @@
+Library
+   signature DELPHIN
+   structure Delphin
+
+   signature TWELF
+   structure Twelf
+
+   signature INTSYN
+   structure IntSyn
+   structure DelphinIntSyntax
+
+   signature LEXERR
+   structure DelphinLex
+   signature PARSERR
+   structure DelphinParser
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+   sources.frontend.cm
+
+   ../twelf/src/stream/sources.cm
+   ../twelf/src/print/sources.cm
+   ../twelf/src/formatter/sources.cm
+   ../twelf/src/lambda/sources.cm
+   ../twelf/src/paths/sources.cm
+   ../twelf/src/solvers/sources.cm
+
+   ../elaboration/sources.syntax.cm
+   ../elaboration/sources.cm
+   ../typecheck/sources.cm
+   ../opsem/sources.cm
+
+   ml-yacc-lib-mod/sources.cm
+   LFparsing.sml   
+   delphin.lex
+   delphin.grm
+   interface.sig
+   interface.fun
+   parse-prg.sig
+   parse-prg.fun
+   delphin.sig
+   delphin.fun
+   delphin.sml

@@ -1,0 +1,16 @@
+Library
+  structure Server
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../compat/sources.cm
+  ../timing/sources.cm
+  ../frontend/sources.cm
+  sigint.sig
+#if defined(MLton)
+  sigint-mlton.sml
+#else
+  sigint-smlnj.sml
+#endif
+  server.sml

@@ -1,0 +1,86 @@
+% Nuprl examples
+% Constable book, Figure 3.9
+
+proof1 : !- P !*! uni 1 -> !- M !*! uni 1 ->
+	  !- _ !*! (P =n=> M =n=> P)
+       = [wffP] [wffQ] 
+	  fun-intro wffP [_][u] 
+	  fun-intro wffQ [_][v] 
+	  u.
+
+proof2 : !- P !*! uni 1 -> !- Q !*! uni 1 -> !- R !*! uni 1 -> 
+	  !- _ !*! (P =n=> Q =n=> R) =n=> (P =n=> Q) =n=> (P =n=> R)
+       = [wffP] [wffQ] [wffR]
+	  fun-intro (fun-form wffP ([_] [_] fun-form wffQ ([_] [_] wffR))) [_][u] 
+	  fun-intro (fun-form wffP ([_] [_] wffQ)) [_][v] 
+	  fun-intro wffP [_][w]
+	  (fun-elim (fun-elim u w) (fun-elim v w)).
+
+proof3 : !- P !*! uni 1 -> !- Q !*! uni 1 ->
+	  !- _ !*! (P =n=> Q =n=> P n/\ Q)
+       = [wffP] [wffQ]  
+	  fun-intro wffP [_][u] 
+	  fun-intro wffQ [_][v] 
+	  sig-intro u v.
+
+proof4 : !- P !*! uni 1 -> !- Q !*! uni 1 ->
+	  !- _ !*! (P n/\ Q =n=> P)
+       = [wffP] [wffQ]  
+	  fun-intro (sig-form wffP [_][_] wffQ) [_][u] 
+	  sig-fst u.
+
+%{
+proof5 : !- P !*! uni 1 -> !- Q !*! uni 1 ->
+	  !- _ !*! (P =n=> P n\/ Q)
+       = [wffP] [wffQ]  
+	  fun-intro wffP [_][u] 
+	  sum-inl u wffQ.
+
+proof6 : !- P !*! uni 1 -> !- Q !*! uni 1 ->
+	  !- _ !*! (Q =n=> P n\/ Q)
+       = [wffP] [wffQ]  
+	  fun-intro wffQ [_][u] 
+	  sum-inr wffP u.
+}%
+
+proof7 : !- P !*! uni 1 -> !- Q !*! uni 1 ->
+	  !- _ !*! ((P =n=> Q) =n=> (P =n=> n~ Q) =n=> n~ P)
+       = [wffP] [wffQ]  
+	  fun-intro (fun-form wffP ([_] [_] wffQ)) [_][u] 
+	  fun-intro (fun-form wffP [_] [_] 
+		     fun-form wffQ [_] [_] 
+		     void-form) [_][v]
+	  fun-intro wffP [_][w] 
+	  void-elim (fun-elim (fun-elim v w) (fun-elim u w)).
+
+proof8 : !- P !*! uni 1 -> !- Q !*! uni 1 ->
+	  !- _ !*! (P n/\ (P =n=> Q) =n=> Q)
+       = [wffP] [wffQ]  
+	  fun-intro (sig-form wffP [_] [_] 
+		     fun-form wffP [_] [_] wffQ) [_][u] 
+	  fun-elim (sig-snd u) (sig-fst u).
+
+%{
+
+% Constable book, Figure 3.10
+
+%abbrev
+proof9 : !- _ !*! nall (uni 2) [A] nall (A ->- (uni 1)) [P]
+	           nall (A ->- (uni 1)) [Q]
+	        ((nall A [x] (app P x) n/\ (app Q x)) n<=>
+		   ((nall A [x] app P x) n/\ (nall A [x] app Q x)))
+       = fun-intro (uni-form (+>= 2 0ge0)) [_] [u] 
+	  fun-intro (fun-form u [_] [_] (uni-form (+>= 1 0ge0))) [_] [v] 
+	  fun-intro (fun-form u [_] [_] (uni-form (+>= 1 0ge0))) [_] [w] 
+	  sig-intro 
+	    (fun-intro (fun-form u [_] [ux] sig-form (uni-culm (fun-elim v ux) (+>= 1 0ge0)) 
+			  _) [_] [_] sig-intro _ _)
+	    (fun-intro _ [_] [_] fun-intro _ [_] [_] _)
+	    .
+}%
+
+
+
+
+
+
