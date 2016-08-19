@@ -1,0 +1,45 @@
+Library
+   signature NABLA
+   structure Nabla
+
+   signature INTSYN
+   structure IntSyn
+   structure NablaIntSyntax
+
+   signature LEXERR
+   structure NablaLex
+   signature PARSERR
+   structure NablaParser
+
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+   sources.frontend.cm
+
+   ../twelf/src/stream/sources.cm
+   ../twelf/src/print/sources.cm
+   (* Do not need formatter
+   ../twelf/src/formatter/sources.cm
+   *)
+   ../twelf/src/lambda/sources.cm
+   ../twelf/src/paths/sources.cm
+   ../twelf/src/names/sources.cm
+   ../twelf/src/solvers/sources.cm
+
+   ../elaboration/sources.syntax.cm
+   ../elaboration/sources.cm
+   ../typecheck/sources.cm
+   ../opsem/sources.cm
+
+   ml-yacc-lib-mod/sources.cm
+   LFparsing.sml   
+   nabla.lex
+   nabla.grm
+   interface.sig
+   interface.fun
+   parse-prg.sig
+   parse-prg.fun
+   nabla.sig
+   nabla.fun
+   nabla.sml

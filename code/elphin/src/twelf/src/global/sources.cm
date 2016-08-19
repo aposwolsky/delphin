@@ -1,0 +1,6 @@
+Library
+  signature GLOBAL
+  structure Global
+is
+  global.sig
+  global.sml

@@ -1,0 +1,11 @@
+Library
+  signature NABLA_OPSEM
+  structure NablaOpsem
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../twelf/src/lambda/sources.cm
+  ../elaboration/sources.syntax.cm
+  opsem.sig
+  opsem.fun

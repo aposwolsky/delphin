@@ -1,0 +1,35 @@
+Library
+  signature PRINT
+  structure Print
+  structure PrintTeX
+  signature CLAUSEPRINT
+  structure ClausePrint
+  structure ClausePrintTeX
+  structure PrintTwega
+  structure PrintXML
+  structure PrintTwega
+  structure PrintOMDoc
+  signature SYMBOL
+  structure SymbolAscii
+  structure SymbolTeX
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../lambda/sources.cm
+  ../names/sources.cm
+  ../formatter/sources.cm
+  symbol.sig
+  symbol.fun
+  print.sig
+  print.fun
+  clause-print.sig
+  clause-print.fun
+  print.sml
+  traverse.sig
+  traverse.fun
+  print-twega.sig
+  print-twega.fun
+  print-xml.sig
+  print-xml.fun
+  print-omdoc.fun

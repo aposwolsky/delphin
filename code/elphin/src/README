@@ -1,0 +1,11 @@
+To build Elphin, simply do "make".  
+This will create an executable "bin/elphin" that you can run.
+
+OR Alternatively,
+you can start SML and then do:
+- CM.make "sources.cm";
+- Nabla.top();
+and this will also get you to Elphin
+
+Once inside Elphin, to load a file simply do:
+<E> use "../example/example.elphin";

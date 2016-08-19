@@ -1,0 +1,10 @@
+%%% A straightforward way to prove propositional logic theorems
+%%% by using uniqueness of canonical form of polynomial in Z(2).
+%%% Author: Roberto Virga
+
+%use equality/booleans.
+
+%% theorem
+theorem : bool -> type.
+
+tt : theorem true.

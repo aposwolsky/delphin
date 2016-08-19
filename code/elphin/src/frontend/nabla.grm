@@ -1,0 +1,361 @@
+(* Grammar for Nabla *)
+(* Author:  Adam Poswolsky *)
+
+structure N = NablaExtSyntax
+
+datatype LetOptions
+	= LetMeta of N.MetaDec * N.MetaTerm
+	| LetLF of N.LFDec * N.MetaTerm
+
+fun deReg (_, x) = x
+fun getReg (r, _) = r
+val join = Paths.join
+
+
+%%
+
+%name Nabla
+%pos int
+%header (functor NablaLrValsFun (structure Token : TOKEN))
+
+%eop EOF
+%noshift EOF
+%verbose
+
+
+%term    ID of Paths.region * string 
+       | DIGITS of Paths.region * int
+       | COLON of Paths.region
+       | EQUAL of Paths.region 
+       | TYPE of Paths.region 
+       | SEMICOLON of Paths.region 
+       | RTARROW  of Paths.region 
+       | LTARROW of Paths.region 
+       | RTPAREN  of Paths.region 
+       | LTPAREN of Paths.region
+       | RTBRACKET  of Paths.region 
+       | LTBRACKET   of Paths.region
+       | RTBRACE  of Paths.region
+       | LTBRACE   of Paths.region
+       | COMMA of Paths.region
+       | AND  of Paths.region
+       | FAIL  of Paths.region
+       | FUNAND of Paths.region (* for mutual recursion *)
+       | LTANGLE  of Paths.region
+       | RTANGLE  of Paths.region
+       | AT of Paths.region
+       | TIMES    of Paths.region
+       | UNDERSCORE of Paths.region
+       | INFIXL of Paths.region
+       | INFIXR of Paths.region
+       | CASE of Paths.region
+       | OF of Paths.region
+       | LET of Paths.region
+       | IN of Paths.region
+       | SECOND of Paths.region
+       | FIRST of Paths.region
+       | FIX of Paths.region
+       | BAR of Paths.region
+       | MATCH of Paths.region
+       | POP of Paths.region
+       | UNIT_TYPE of Paths.region
+       | USE of string
+       | EOF 
+
+%nonterm    start of N.NablaProgram
+	    | nablaprogram of N.NablaProgram
+            | topdec of N.TopDec
+	    | lfdec of N.LFDec
+	    | metadec of N.MetaDec
+	    | metaterm of N.MetaTerm
+	    | metatermlist of (Paths.region * N.MetaTerm) list
+	    | letlist of LetOptions list
+	    | lftype of N.LFType
+	    | metatype of N.MetaType
+	    | infixOption of N.Infix option
+	    | lfterm of N.LFTerm
+	    | optSemis of unit
+	    | mutualdef of (Paths.region * N.MetaDec * N.MetaTerm) list
+
+(* Set precedences *)
+
+%right RTARROW 
+%left LTARROW
+
+
+
+(* 
+ * BRACKET doesn't work if specified as nonassoc
+ * for example, <[p] a [q] b>
+ * We need to specify to parse it either as:
+ * (left) = ([p]a([q]b))
+	Interpretation:  Apply ([p]a) to ([q]b)
+ * (right) = [p](a([q]b))
+	Interpretation:  [p] Apply(a, [q]b)
+ * 
+ * Therefore "right" is the correct interpretation.
+ *)
+%right BAR
+%right LTBRACKET RTBRACKET LTBRACE RTBRACE
+%right MATCH 
+%right LTPAREN RTPAREN LTANGLE RTANGLE ID FAIL FIX EQUAL CASE OF LET IN
+%right TIMES COMMA COLON
+%nonassoc FIRST SECOND
+%nonassoc POP
+%left AND (* AND is pairing inside <> *)
+%left AT (* AT is application inside <> *)
+
+
+
+%start start
+
+%%
+
+start		: nablaprogram
+			(nablaprogram)
+
+nablaprogram	: 
+			(nil)
+		| topdec nablaprogram
+			(topdec::nablaprogram)
+
+optSemis	:
+			()
+		| SEMICOLON optSemis
+			()
+
+mutualdef	: 
+			(nil)
+		| FUNAND metadec EQUAL metaterm mutualdef
+			(let
+	 		 val region = join(N.getRegMetaDec(metadec), 
+					N.getRegMetaTerm(metaterm))
+			 in
+			  ((region, metadec, metaterm)::mutualdef)
+			 end)
+
+
+topdec		: LTANGLE ID COLON TYPE RTANGLE optSemis
+			(N.LFTypeConstant(join(LTANGLE,RTANGLE),deReg ID))
+		| LTANGLE ID COLON lftype infixOption RTANGLE  optSemis
+			(N.LFObjectConstant(join(LTANGLE,RTANGLE),N.LFDec(join(getReg ID, N.getRegLFType(lftype)),deReg ID, lftype), infixOption))
+		| metadec EQUAL metaterm mutualdef SEMICOLON optSemis
+			(let
+	 		 val region = join(N.getRegMetaDec(metadec), 
+					N.getRegMetaTerm(metaterm))
+			 in
+			  N.MetaFix ((region, metadec, metaterm)::mutualdef)
+			 end)
+
+		| metaterm SEMICOLON optSemis
+			(let
+	 		 val region = N.getRegMetaTerm(metaterm)
+			 in
+			  N.MetaVal(region, metaterm)
+			 end)
+
+		| USE SEMICOLON optSemis
+			(N.Use (USE))
+			
+
+
+infixOption	: 
+			(NONE)
+		| INFIXL DIGITS
+			(SOME (N.INFIXL(join(INFIXL, getReg DIGITS),deReg DIGITS)))
+		| INFIXR DIGITS
+			(SOME (N.INFIXR(join(INFIXR, getReg DIGITS),deReg DIGITS)))
+		| DIGITS
+			(SOME (N.NONASSOC(getReg DIGITS,deReg DIGITS)))
+
+lftype		: ID
+			(N.TypeConstant ID)
+		| lftype RTARROW lftype
+			(N.RtArrow 
+			(join(N.getRegLFType(lftype1), N.getRegLFType(lftype2)),
+			 lftype1, lftype2))
+		| lftype LTARROW lftype
+			(N.LtArrow 
+			(join(N.getRegLFType(lftype1), N.getRegLFType(lftype2)),
+			 lftype1, lftype2))
+		| lftype TIMES lftype
+			(N.And 
+ 			(join(N.getRegLFType(lftype1), N.getRegLFType(lftype2)),
+			 lftype1, lftype2))
+		| UNIT_TYPE
+			(N.UnitType (UNIT_TYPE))
+		| UNDERSCORE
+			(N.Omit (UNDERSCORE))
+		| LTPAREN lftype RTPAREN
+			(lftype)
+
+
+lfterm		: ID
+			(N.ObjectConstant ID)
+		| LTBRACKET lfdec RTBRACKET lfterm
+			(N.Fn (join(LTBRACKET, N.getRegLFTerm(lfterm)), lfdec, lfterm))
+		| lfterm lfterm
+			%prec AT (* AT is an application *)
+			(N.App 
+ 			(join(N.getRegLFTerm(lfterm1), N.getRegLFTerm(lfterm2)),
+			 lfterm1,lfterm2))
+		| lfterm COMMA lfterm
+			(N.Pair 
+ 			(join(N.getRegLFTerm(lfterm1), N.getRegLFTerm(lfterm2)),
+			 lfterm1, lfterm2))
+		| FIRST lfterm
+			(N.First 
+ 			(join(FIRST, N.getRegLFTerm(lfterm)),
+			 lfterm))
+		| SECOND lfterm
+			(N.Second 
+ 			(join(SECOND, N.getRegLFTerm(lfterm)),
+			 lfterm))
+	        | lfterm COLON lftype
+			(N.Of
+			(join(N.getRegLFTerm(lfterm), N.getRegLFType(lftype)),
+			lfterm,
+			lftype))
+		| LTPAREN lfterm RTPAREN
+			(N.Paren 
+ 			(join(LTPAREN, RTPAREN),
+			 lfterm))
+	
+lfdec		: ID COLON lftype
+			(N.LFDec (join(getReg ID, N.getRegLFType(lftype)), deReg ID, lftype))
+		| ID
+			(N.LFDec (getReg ID, deReg ID, N.Omit(getReg ID)))
+
+metatype	: LTANGLE lftype RTANGLE
+			(N.LFinsideType(join(LTANGLE, RTANGLE),lftype))
+		| LTBRACKET RTBRACKET metatype
+			(N.Box(
+			 join(LTBRACKET, N.getRegMetaType(metatype)),
+			 metatype))
+		| metatype RTARROW metatype
+			(N.MetaArrow(
+			 join(N.getRegMetaType(metatype1), N.getRegMetaType(metatype2)),
+			 metatype1, 
+			 metatype2))
+		| metatype TIMES metatype
+			(N.MetaAnd(
+			 join(N.getRegMetaType(metatype1), N.getRegMetaType(metatype2)),
+			 metatype1, 
+			 metatype2))
+		| UNDERSCORE
+			(N.MetaOmit (UNDERSCORE))
+		| LTPAREN metatype RTPAREN
+			(metatype)
+
+letlist		: 
+			(nil)
+		| metadec EQUAL metaterm SEMICOLON letlist
+			(LetMeta(metadec, metaterm) :: letlist)
+		| LTANGLE lfdec RTANGLE EQUAL metaterm SEMICOLON letlist
+			(LetLF(lfdec, metaterm) :: letlist)
+
+
+metadec		: ID COLON metatype
+			(N.MetaDec (
+			 join(getReg ID, N.getRegMetaType(metatype)), 
+			 deReg ID, 
+			 metatype))
+		| ID
+			(N.MetaDec (getReg ID, deReg ID, N.MetaOmit(getReg ID)))
+
+metaterm	: ID
+			(N.MetaID (getReg ID,deReg ID))
+	        | FAIL
+			(N.Fail (FAIL))
+		| LTANGLE RTANGLE
+			(N.LFinside(join(LTANGLE,RTANGLE), N.Unit(join(LTANGLE,RTANGLE))))
+		| LTANGLE lfterm RTANGLE
+			(N.LFinside(join(LTANGLE,RTANGLE), lfterm))
+		| POP metaterm
+			(N.Pop(join(POP,N.getRegMetaTerm(metaterm)), metaterm))
+		| metaterm MATCH metaterm
+			(N.PatMatch(
+			 join(N.getRegMetaTerm(metaterm1), N.getRegMetaTerm(metaterm2)),
+			 metaterm1, 
+			 metaterm2))
+		| metaterm metaterm
+			%prec AT (* AT is an application *)
+			(N.MetaApp(
+			 join(N.getRegMetaTerm(metaterm1), N.getRegMetaTerm(metaterm2)),
+			 metaterm1, 
+			 metaterm2))
+		| metaterm COMMA metaterm
+			(N.MetaPair(
+			 join(N.getRegMetaTerm(metaterm1), N.getRegMetaTerm(metaterm2)),
+			 metaterm1,
+			 metaterm2))
+		| metaterm BAR metaterm
+			(N.Bar(
+			 join(N.getRegMetaTerm(metaterm1), N.getRegMetaTerm(metaterm2)),
+			 metaterm1, 
+			 metaterm2))
+		| LTBRACE lfdec RTBRACE metaterm
+			(N.New(
+			 join(LTBRACE,N.getRegMetaTerm(metaterm)), 
+			 lfdec, 
+			 metaterm))
+		| LTBRACE LTBRACE lfdec RTBRACE RTBRACE metaterm
+			(N.Nabla(
+			 join(LTBRACE,N.getRegMetaTerm(metaterm)), 
+			 lfdec, 
+			 metaterm))
+		| LTBRACKET lfdec RTBRACKET metaterm
+			(N.Eps(
+			 join(LTBRACKET,N.getRegMetaTerm(metaterm)), 
+			 lfdec, 
+			 metaterm))
+		| LTBRACKET LTBRACKET metadec RTBRACKET RTBRACKET metaterm
+			(N.EpsM(
+			 join(LTBRACKET,N.getRegMetaTerm(metaterm)), 
+			 metadec, 
+			 metaterm))
+		| FIX metadec EQUAL metaterm
+			(N.Fix(
+			 join(N.getRegMetaDec(metadec), N.getRegMetaTerm(metaterm)),
+			 metadec, 
+			 metaterm))
+		| FIRST metaterm
+			(N.MetaFirst (
+			 join(FIRST, N.getRegMetaTerm(metaterm)),
+			 metaterm))
+		| SECOND metaterm
+			(N.MetaSecond (
+			 join(SECOND, N.getRegMetaTerm(metaterm)),
+			 metaterm))
+		(* Syntactic Sugar *)
+		| LET letlist IN metaterm
+			(let
+			    val entireR = join(LET, N.getRegMetaTerm(metaterm))
+			    fun createLets [] m = m
+			      | createLets (LetMeta(x,y)::xs) m = N.Let(entireR, x, y, createLets (xs) m)
+			      | createLets (LetLF(x,y)::xs) m = N.LetM(entireR, x, y, createLets (xs) m)
+			 in
+			    (createLets letlist metaterm)
+			 end)
+		| CASE metaterm OF metaterm
+			(N.Case(
+			 join(CASE, N.getRegMetaTerm(metaterm2)),
+			 metaterm1, 
+			 metaterm2))
+		| metaterm AT metaterm
+			(N.AppInside(
+			 join(N.getRegMetaTerm(metaterm1), N.getRegMetaTerm(metaterm2)),
+			 metaterm1, 
+			 metaterm2))
+		| metaterm AND metaterm
+			(N.PairInside(
+			 join(N.getRegMetaTerm(metaterm1), N.getRegMetaTerm(metaterm2)),
+			 metaterm1, 
+			 metaterm2))
+		| LTPAREN metatermlist RTPAREN
+			(N.Sequence metatermlist)
+
+metatermlist	: metaterm
+			([(N.getRegMetaTerm metaterm, metaterm)])
+	        | metaterm SEMICOLON metatermlist
+			((N.getRegMetaTerm metaterm1, metaterm1)::metatermlist)

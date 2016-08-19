@@ -1,0 +1,4 @@
+(* Merge sort *)
+(* Author: Carsten Schuermann *)
+
+merge.d implements the standard merge sort operation in Elphin.

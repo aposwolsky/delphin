@@ -1,0 +1,5 @@
+%%% Sample queries.
+%%% Author: Roberto Virga.
+
+%query 1 *
+sieve 500 L.

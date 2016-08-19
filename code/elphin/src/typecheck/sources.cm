@@ -1,0 +1,15 @@
+Library
+  signature NABLA_TYPECHECK
+  structure NablaTypeCheck
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  twelf/sources.cm
+  ../twelf/src/lambda/sources.cm
+  ../elaboration/sources.syntax.cm
+
+  typecheck.sig
+  typecheck.fun
+
+

@@ -1,0 +1,49 @@
+Library
+  signature ABSTRACTTABLED
+  structure AbstractTabled
+  signature TABLEINDEX
+  structure TableIndex
+  signature TABLED
+  structure Tabled
+
+  signature ABSMACHINE
+  structure AbsMachine
+  signature PTRECON
+  structure PtRecon
+  signature TRACE
+  structure Trace
+  structure TMachine
+  structure SwMachine
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../compat/sources.cm
+  ../global/sources.cm
+  ../table/sources.cm
+  ../lambda/sources.cm
+  ../names/sources.cm
+  ../print/sources.cm
+  ../formatter/sources.cm  
+  ../index/sources.cm
+  ../typecheck/sources.cm
+  ../solvers/sources.cm
+  ../subordinate/sources.cm
+  ../tabling/sources.cm
+  ../compile/sources.cm
+  abstract.sig  
+  abstract.fun
+  index.sig
+  index.fun
+  tabled.sig
+  tabled.fun
+
+  absmachine.sig
+  absmachine.fun
+  ptrecon.sig
+  ptrecon.fun
+  trace.sig
+  trace.fun
+  tmachine.fun
+  swmachine.fun
+  opsem.sml

@@ -1,0 +1,20 @@
+Library
+  signature TIMING
+  structure Timing
+  signature TWELF
+  structure Twelf
+  signature MTPI
+  structure MTPi
+  signature CONVERTER
+  structure Converter
+  signature INTSYN
+  structure IntSyn
+  structure PrintXML
+  structure PrintOMDoc
+  structure PrintTwega
+  signature FLIT
+  structure Flit
+  signature STYLECHECK
+  structure StyleCheck
+is
+  src/frontend/sources.cm

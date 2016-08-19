@@ -1,0 +1,62 @@
+%%% Sieve of Eratosthenes - a (unefficient) version that uses lists
+%%% Author: Roberto Virga
+
+%use inequality/rationals.
+
+%% equality
+== : rational -> rational -> type.  %infix none 1000 ==.
+
+id : X == X.
+
+%% lists of numbers
+list : type.
+
+nil : list.
+, : rational -> list -> list. %infix right 100 ,.
+
+%% generate candidates
+generate : rational -> rational -> list -> type.
+
+gen0 : generate K N nil
+         <- K > N.
+
+gen1 : generate K N (K , L)
+         <- N >= K
+         <- generate (K + 2) N L.
+
+%% remove multiples
+remove : rational -> rational -> list -> list -> type.
+
+rem0 : remove N K nil nil.
+
+rem1 : remove N K (M , L) (M , L')
+         <- (N * K) > M
+         <- remove N K L L'.
+
+rem2 : remove N K (M , L) L'
+         <- M == (N * K)
+         <- remove N (K + 2) L L'.
+
+rem3 : remove N K (M , L) L'
+         <- M > (N * K)
+         <- remove N (K + 2) (M , L) L'.
+
+%% select candidates
+select : list -> list -> type.
+
+sel0 : select nil nil.
+
+sel1 : select (P , L) (P , PL)
+         <- remove P P L L'
+         <- select L' PL.
+
+%% sieve of Eratosthenes
+sieve : rational -> list -> type.
+
+sieve0 : sieve N nil
+           <- 2 > N.
+
+sieve1 : sieve N (2 , PL)
+           <- N >= 2
+           <- generate 3 N L
+           <- select L PL.

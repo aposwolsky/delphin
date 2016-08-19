@@ -1,0 +1,13 @@
+Library
+  signature TABLEDSYN
+  structure TabledSyn
+is
+  ../table/sources.cm
+  ../lambda/sources.cm
+  ../print/sources.cm
+  ../names/sources.cm	
+  ../paths/sources.cm
+  ../index/sources.cm
+  tabledsyn.sig
+  tabledsyn.fun
+  tabled.sml

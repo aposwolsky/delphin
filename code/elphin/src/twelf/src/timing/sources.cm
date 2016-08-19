@@ -1,0 +1,14 @@
+Library
+  signature TIMERS
+  structure Timers
+  signature TIMING
+  structure Timing
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../compat/sources.cm
+  timers.sig
+  timers.fun
+  timers.sml
+  timing.sml

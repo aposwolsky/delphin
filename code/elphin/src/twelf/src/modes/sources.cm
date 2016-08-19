@@ -1,0 +1,35 @@
+Library
+  signature MODESYN
+  structure ModeSyn
+  signature MODETABLE
+  functor ModeTable
+  structure ModeTable
+  signature MODEDEC
+  structure ModeDec
+  signature MODECHECK
+  functor ModeCheck
+  structure ModeCheck
+  signature MODEPRINT
+  structure ModePrint
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../global/sources.cm
+  ../table/sources.cm
+  ../lambda/sources.cm
+  ../formatter/sources.cm
+  ../print/sources.cm
+  ../names/sources.cm	
+  ../paths/sources.cm
+  ../index/sources.cm
+  modesyn.sml
+  modetable.sig
+  modetable.fun
+  modedec.sig
+  modedec.fun
+  modecheck.sig
+  modecheck.fun 
+  modeprint.sig
+  modeprint.fun
+  modes.sml

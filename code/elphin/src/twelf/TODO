@@ -1,0 +1,144 @@
+Wed Mar 17 22:24:26 1999 -fp
+
+Currently, constraints attached to the variables occurring only the proof term
+are not printed.  There is not simple reliable way to summarize the active
+constraints.  This should be fixed in a more general CLP architecture.
+
+Tue Mar 30 10:38:02 1999
+
+remove local open's
+
+
+Wed Mar 31 18:28:56 EST 1999
+
+DONE -cs -fp in ctxLookup unnecessary wrapper function.
+
+
+Fri Apr  9 09:44:55 EDT 1999 -cs
+
+Non recursive type families do not receive the proper treatment. Their 
+ratio is commonly 1, but they should be prefered splitting candidates: The
+ranking of splitting variables should be something like
+
+1. Induction variables
+2. Non-recursive non-induction variables
+3. Recursive non-induction variables
+
+
+Thu May  6 16:00:06 EDT 1999 -cs
+abstract doesn't depend on unify
+
+
+Fri May 14 14:24:48 EDT 1999 -cs
+Extend type checker to type check also proof terms including Skolem constants
+and Skolem assumption. 
+
+
+Tue Aug 31 22:16:15 EDT 1999 -cs
+Bug with has to do with free variables in context scheme description. Should
+be caught. Raises currently an uncaught match exception.
+
+%theorem ts' : forallG (pi {p} {m} {e: extract p m})
+                forall* {A:o} {P: |- A} {M: term} {T: tp}
+                forall {D: extract P M} {E: extract_tp A T}
+                exists {F: of M T} true.
+
+%prove 6 D (ts' D _ _).  
+
+(The extraction clause for imp intro:
+ex_impliesi : extract (impliesi P) (lam M)
+               <- {x:|- A} {v:term} extract x v -> extract (P x) (M v).
+)
+
+
+and got 
+%theorem ts' :
+   {A:o} {P:|- A} {M:term} {T:tp}
+      extract P M -> extract_tp A T -> of M T -> type.
+%prove 6 D (ts' D _ _).
+%mode +{A:o} +{P:|- A} +{M:term} +{T:tp} +{D:extract P M}
++{E:extract_tp A T}
+   -{F:of M T} ts' D E F.
+[Closing file
+/home/penny/share/research/twelf/sub-extraction/pap/extract.thm]
+Unrecognized exception
+Uncaught exception: nonexhaustive match failure
+%% ABORT %%
+
+
+Tue Sep  7 10:34:22 EDT 1999 -cs
+
+Problem with Error messages.  Sometimes, Twelf prints the wrong file names
+in the error messages, when parsing %theorem declarations, and type 
+reconstruction fails.  The problem is that there is a new type reconstruction
+module for tracing (TpTrace), which takes over the managment of type
+reconstruction errors and filenames where they occur. If TpTrace is used
+for parsing %theorem declarations, the filname store it not properly reset. 
+The easiest fix is to use tprecon instead of tptrace.
+
+
+
+Mon May 22 16:26:36 EDT 2000  -kw,cs
+
+Bug:
+
+a: ([x] x) type.
+b: ([x] x) a.
+
+loads and typechecks.  Problem in frontend.fun?
+ 
+Update (Mon Jan 22 17:36:24 EST 2001):
+  fixed in new implementation of type reconstruction  -kw
+
+
+
+Mon Jan 22 17:37:10 EST 2001  -kw
+
+Bug: *** fixed (see below) ***
+
+> From: Andreas Abel <abel+@cs.cmu.edu>
+> Subject: Minor twelf bug
+> To: Frank Pfenning <fp@cs.cmu.edu>
+> Date: Tue, 16 Jan 2001 15:28:59 -0500
+> 
+> Twelf output a wrong filename for the error location:
+> 
+> [Opening file /usr0/abel/afs/twelf/lambdamu/lambdamu.thm]
+> ...
+> %theorem ==>-->' : {T:ty} {M:tm T} {M':tm T} M --> M' -> M ==> M' ->
+> type.
+> /usr0/abel/afs/twelf/lambdamu/lambdamu.quy:30.17-30.22 Error: 
+> Type mismatch
+> ...
+> [Closing file /usr0/abel/afs/twelf/lambdamu/lambdamu.thm]
+> /usr0/abel/afs/twelf/lambdamu/lambdamu.thm: 1 error found
+> %% ABORT %%
+> 
+> (wrong filename is in line 4)
+
+The fix will require revising the staging of parsing vs. type
+reconstruction in moderecon.fun, adding a filename parameter to
+e.g. the theoremToTheorem function of thmrecon.fun, and possibly
+revisiting the way error messages are reported in mode and theorem
+declaration processing.
+
+
+Sat Mar  3 13:11:04 2001 -fp
+
+Fixed filename bug by globally calling TpRecon.errorReset (fileName)
+when loading a new file.
+
+Also fixed bug with incorrect error message when parsing call patterns:
+- uncaught match exception if head is object-level constant
+- no error location if called family has not been declared
+
+Sun Mar 25 19:48:03 2001 -fp
+
+Mode checking can now be done post-hoc!
+
+Added
+  %covers mdec.  (syntax: mode declaration)
+  %total tdec.   (syntax: termination declaration)
+for closed worlds and
+  %worlds wdec callpats.        (modified from -cs)
+which checks worlds locally.

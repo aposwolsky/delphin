@@ -1,0 +1,16 @@
+Library
+  signature SUBORDINATE
+  structure Subordinate
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../compat/sources.cm
+  ../global/sources.cm
+  ../table/sources.cm
+  ../lambda/sources.cm
+  ../names/sources.cm
+  intset.sml
+  subordinate.sig
+  subordinate.fun
+  subordinate.sml

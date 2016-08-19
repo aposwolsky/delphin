@@ -1,0 +1,25 @@
+Library
+  structure NablaIntSyntax
+  structure NablaExtSyntax
+  structure PrintNablaExt
+  structure PrintNablaInt
+  structure NormalizeNabla
+  structure UnifyNabla
+  structure NablaAbstract
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../twelf/src/paths/sources.cm
+  ../twelf/src/lambda/sources.cm
+  ../twelf/src/print/sources.cm
+
+  extSyntax.sml
+  intSyntax.sml
+  printNablaExt.sml
+  printNablaInt.sml
+  normalizeNabla.sml
+  unifyNabla.sml
+  abstract.sig
+  abstract.fun
+  abstract.sml  

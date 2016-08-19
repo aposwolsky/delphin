@@ -1,0 +1,32 @@
+Library
+  signature CS_MANAGER
+  structure CSManager
+  signature CS_INSTALLER
+  structure CSInstaller
+is
+#if defined(NEW_CM)
+  $/basis.cm
+#endif
+  ../compat/sources.cm
+  ../trail/sources.cm
+  ../global/sources.cm
+  ../domains/sources.cm
+  ../lambda/sources.cm
+  ../names/sources.cm
+  ../modes/sources.cm
+  ../table/sources.cm
+  ../print/sources.cm
+  ../formatter/sources.cm
+  cs-manager.sig
+  cs-manager.fun
+  cs.sig
+  cs-eq-field.sig
+  cs-eq-field.fun
+  cs-ineq-field.fun
+  cs-eq-integers.sig
+  cs-eq-integers.fun
+  cs-ineq-integers.fun
+  cs-eq-strings.fun
+  cs-eq-bools.fun
+  cs-integers-word.fun
+  solvers.sml

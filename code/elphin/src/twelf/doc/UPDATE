@@ -1,0 +1,167 @@
+Preparation for Twelf 1.5
+
+Externally visible changes:
+
+- twelf-mode: twelf-batch-chatter
+
+  The variable twelf-batch-chatter causes Twelf to temporarily change
+  chatter levels while checking/appending a config or loading a file.
+  Reducing twelf-batch-chatter relative to twelf-chatter (to "2", for
+  example) speeds the loading of large configs while keeping Twelf
+  verbose enough during interactive use.
+
+- Config.append skips reloads of up-to-date files
+
+  Config.append now reloads only those files (1) that have been modified
+  since the last Config.load or Config.append, or (2) that depend on
+  any such modified files.  (This may cause unexpected behavior in the
+  presence of constructs that modify global state, such as pragmas
+  and clauses used in operational semantics.)
+
+- twelf-mode: C-c C-a runs twelf-save-append-config
+
+- twelf-mode: twelf-check-config-clears-server-buffer
+
+  If non-nil, twelf-check-config-clears-server-buffer causes
+  twelf-check-config to clear the server buffer before any new output
+  is written.  Prevents long-running *twelf-server* buffers from
+  consuming too much memory.
+
+Preparation for Twelf 1.4
+
+Externally visible changes:
+
+- %clause definitions
+  %clause d : A = M. behaves like d : A. for proof search
+- %freeze a1 ... an.
+  will freeze families a1 ... an
+- Twelf.Recon structure to trace type reconstruction
+- family-level definitions are now allowed, opaque to proof search
+- Tabled abstract machine 
+  
+  %querytabled n A.
+
+  will try to solve A in n stages. 
+  Evaluation will stop after n stages, even if 
+  evaluation is not complete. If the evaluation is completed after k stages,
+  and k less than n, then evaluations stops after k stages.
+
+  global search parameters:
+  * Twelf.TableIndex.strategy  : default variant checking
+ 
+     Twelf.TableIndex.strategy := Twelf.TableIndex.Subsumption
+     Twelf.TableIndex.strategy := Twelf.TableIndex.Variant
+
+  * Twelf.TableIndex.strengthen : default true 
+     apply strengthening during abstraction on term
+     (strengthening on hypothesis is not yet implemented)
+
+  * term depth : (very experimental)) 
+    forces the abstract machine to suspend a goal, if the termdepth is exceeded.
+    default : termdepth = NONE
+    (not used in default mode)  
+
+- mode checking can now be done post-hoc
+- %mode and %covers allows mutual declarations (using paren syntax)
+- %covers mdec.  (where mdec is mode declaration)
+- %total tdec.   (where tdec is termination declaration)
+- %worlds wdec callpats.  (where wdec is worlds declarations)
+
+Internal changes:
+
+- made SML'97 compliant and ported to MLton, PolyML, and SML/NJ >= 110.20
+  this was achieved by partial de-functorization.
+
+README for Twelf 1.3
+
+Major internal update to Twelf 1.2, available as alpha release.
+
+Externally visible changes:
+
+- Constraints
+
+Type reconstruction and the logic programming engine (but not yet
+the theorem prover) allow various constraint domains in the style
+of constraint logic programming languages.  The main ones are
+equalities and inequalities over rationals and integers.
+
+- Tracing and Breakpoints
+
+The logic programming engine now support tracing and setting of
+breakpoints for illustration and debugging purposes.
+
+- Theorem Prover
+
+The theorem prover now allows quantification over regular context.  The
+theorem prover will also use previously proved theorems with %prove) and
+ignore those with %establish, which is otherwise equivalent.  In unsafe
+mode, %assert can be used to claim theorems.  However, at present no
+longer generates proof terms.
+
+- Reduction Checking
+
+The termination checker has been extended to verify if output arguments
+to a predicate are smaller than some inputs with the %reduces
+declaration.
+
+- Signature Printing
+
+Signatures can now be printed, also in TeX format.
+
+- Abbreviations
+
+Added abbreviations (%abbrev) which, unlike definition, do not need to
+be strict.
+
+- Name Preferences
+
+Name preference declarations (%name) now allow an optional second
+argument for naming of parameters.
+
+----------------------------------------------------------------------
+----------------------------------------------------------------------
+README for Twelf 1.2R4
+
+Major internal update to Twelf 1.2.
+
+Externally visible changes:
+ - bug fixes (through twelf-1-2 pl5)
+ - definitions need not be strict
+ - %name takes optional second argument (prefered name for parameters)
+ - %assert <callpats> after Twelf.unsafe := true;
+   is like %prove without proving anything
+ - %establish <nat> <order> <callpats> like %prove, but result
+   will never be used as a lemma in future %prove
+ - Twelf.Print.sgn and Twelf.Print.prog print signature
+ - Twelf.Print.TeX.sgn and Twelf.Print.TeX.prog print signature in
+   TeX format (see .../twelf/tex/ directory)
+ - Added tracing and breakpoints/stepping in operational semantics.
+   Recommended: use pull-down menus in Emacs, since documentation
+   has not been written yet.
+ - Theorem prover has been generalized, but is not yet stable or
+   documented.  Old %theorem commands should (mostly) still work.
+----------------------------------------------------------------------
+Notes on 1.2 => 1.3
+
+? Add remark about optimize
+? Remark about "mixed substitution incompleteness"
+? add %_unprintable_% and appropriate action to type reconstruction.
+
++ Add remark about "%assert" and "safe mode"
++ Add remark about "%establish" and "%prove"
++ Add Twelf.unsafe
++ Added Chapter on constraints
++ Added section of reduction checking
++ Edited section on theorem prover
++ Add Twelf.Print.sgn
++ Add Twelf.Print.prog
++ Add TeX remarks
++ Add Twelf.Print.TeX.sgn and prog
++ Add tracing.
++ %name takes optional second argument
++ Prefix argument to a few command now selects the server buffer
++ Add Twelf.make
++ Remove strictness remarks / %abbrev
++ fixity operators can now take additional arguments
++ add Twelf prover doc /afs/cs/project/twelf/www/alpha/twelf-prover.html
++ add reduction doc /afs/cs/user/bp/www/twelf/twelf-reduction.html
