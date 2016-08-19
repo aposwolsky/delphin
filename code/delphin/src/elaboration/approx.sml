@@ -19,9 +19,9 @@ structure DelphinApprox =
       
 
     datatype Types
-      = LF of Paths.region * DelphinExtSyntax.isParam * Approx.Exp
-      | Meta of Paths.region * DelphinExtSyntax.isParam * Formula
-      | SmartInj of Paths.region * Approx.Exp * SmartInj
+      = LF of Paths.region * DelphinIntSyntax.isParam * Approx.Exp
+      | Meta of Paths.region * DelphinIntSyntax.isParam * Formula
+      | SmartInj of Paths.region * Approx.Exp * SmartInj * DelphinIntSyntax.isParam
       
     and Formula
       = Top     of Paths.region
@@ -51,10 +51,10 @@ structure DelphinApprox =
     fun whnfF (FVar (_, ref (SOME F))) = whnfF F
       | whnfF F = F
 
-    fun whnfT (SmartInj (r, A, InjLF)) = LF(r, DelphinExtSyntax.Existential, A)
-      | whnfT (SmartInj (r, A, InjMeta)) = Meta(r, DelphinExtSyntax.Existential, 
-						Exists(r, NormalDec (r, NONE, LF(r, DelphinExtSyntax.Existential, A)), Top r))
-      | whnfT (SmartInj (r, A, InjVar (ref (SOME I)))) = whnfT(SmartInj(r, A, I))
+    fun whnfT (SmartInj (r, A, InjLF, isP)) = LF(r, isP, A)
+      | whnfT (SmartInj (r, A, InjMeta, isP)) = Meta(r, DelphinIntSyntax.Existential, 
+						Exists(r, NormalDec (r, NONE, LF(r, isP, A)), Top r))
+      | whnfT (SmartInj (r, A, InjVar (ref (SOME I)), isP)) = whnfT(SmartInj(r, A, I, isP))
       | whnfT (Meta (r, isP, F)) = Meta(r, isP, whnfF F)
       | whnfT T = T
 
@@ -73,14 +73,27 @@ structure DelphinApprox =
     and occursNewDec (r, NewDecLF _) = false
       | occursNewDec (r, NewDecMeta (_, _, F)) = occursFormula(r, F)
       
+      
+    fun unifyParam (DelphinIntSyntax.Existential, DelphinIntSyntax.Existential) = ()
+      | unifyParam (DelphinIntSyntax.Param, DelphinIntSyntax.Param) = ()
+      | unifyParam (DelphinIntSyntax.PVar (r as ref (SOME P)), P2) = unifyParam (P, P2)
+      | unifyParam (P2, DelphinIntSyntax.PVar (r as ref (SOME P))) = unifyParam (P2, P)
+      | unifyParam (DelphinIntSyntax.PVar (r1 as ref NONE), P2 as DelphinIntSyntax.PVar (r2 as ref NONE)) =  if (r1=r2) then () else (r1 := SOME P2)
+      | unifyParam (DelphinIntSyntax.PVar (r1 as ref NONE), P2 as DelphinIntSyntax.Existential) = (r1 := SOME P2)
+      | unifyParam (DelphinIntSyntax.PVar (r1 as ref NONE), P2 as DelphinIntSyntax.Param) = (r1 := SOME P2)
+      | unifyParam (P2 as DelphinIntSyntax.Existential, DelphinIntSyntax.PVar (r1 as ref NONE)) = (r1 := SOME P2) 
+      | unifyParam (P2 as DelphinIntSyntax.Param, DelphinIntSyntax.PVar (r1 as ref NONE)) = (r1 := SOME P2)
+      | unifyParam _ = raise ApproxUnify ("IsParam Matching Failed")
 
     fun unifyTypes (T1, T2) = unifyTypesN(whnfT T1, whnfT T2) (* whnfT gets rid of instantiated InjVars and calls whnfF if formula *)
     and unifyTypesN (LF (_, _, A1), LF (_, _, A2)) = (Approx.match (A1, A2)
                                           handle Approx.Unify s =>
 					       raise ApproxUnify ("LF Approx. Matching Failed:  " ^ s))
       | unifyTypesN (Meta (_, _, F1), Meta (_, _, F2)) = unifyFormulasN (F1, F2)
-      | unifyTypesN (SmartInj (_, A1, InjVar (r1 as ref NONE)), SmartInj (_, A2, I as InjVar (r2 as ref NONE))) =
+      | unifyTypesN (SmartInj (_, A1, InjVar (r1 as ref NONE), isP1), SmartInj (_, A2, I as InjVar (r2 as ref NONE), isP2)) =
                                      let
+				       val _ = unifyParam(isP1, isP2)
+					 
 				       val _ = (Approx.match (A1, A2)
                                           handle Approx.Unify s =>
 					       raise ApproxUnify ("LF Approx. Matching Failed:  " ^ s))
@@ -88,10 +101,10 @@ structure DelphinApprox =
 				       (if (r1 = r2) then () else r1 := SOME I)
 				     end
 				       
-      | unifyTypesN (T1 as SmartInj (_, A, InjVar (r as ref NONE)), T2 as LF _) = (r := SOME InjLF ; unifyTypes(T1, T2))
-      | unifyTypesN (T1 as SmartInj (_, A, InjVar (r as ref NONE)), T2 as Meta _) = (r := SOME InjMeta ; unifyTypes(T1, T2))
-      | unifyTypesN (T1 as LF _, T2 as SmartInj (_, A, InjVar (r as ref NONE))) = (r := SOME InjLF ; unifyTypes(T1, T2))
-      | unifyTypesN (T1 as Meta _, T2 as SmartInj (_, A, InjVar (r as ref NONE))) = (r := SOME InjMeta ; unifyTypes(T1, T2))
+      | unifyTypesN (T1 as SmartInj (_, A, InjVar (r as ref NONE), isP1), T2 as LF _) = (r := SOME InjLF ; unifyTypes(T1, T2))
+      | unifyTypesN (T1 as SmartInj (_, A, InjVar (r as ref NONE), isP1), T2 as Meta _) = (r := SOME InjMeta ; unifyTypes(T1, T2))
+      | unifyTypesN (T1 as LF _, T2 as SmartInj (_, A, InjVar (r as ref NONE), isP1)) = (r := SOME InjLF ; unifyTypes(T1, T2))
+      | unifyTypesN (T1 as Meta _, T2 as SmartInj (_, A, InjVar (r as ref NONE), isP1)) = (r := SOME InjMeta ; unifyTypes(T1, T2))
 
       | unifyTypesN _ = raise ApproxUnify ("Approx. Matching Failed:  Incompatible Types (LF vs Meta)")
 					  
@@ -130,20 +143,14 @@ structure DelphinApprox =
     in
     val rDummy = Paths.Reg(~1,~1)
 
-    (* convert exact to approximate type *)
-    fun isP2ApxN(D.Existential) = DelphinExtSyntax.Existential
-      | isP2ApxN(D.Param) = DelphinExtSyntax.Param
-      | isP2ApxN _ = DelphinExtSyntax.OmittedParam
-
-    fun isP2Apx(isP) = isP2ApxN(D.whnfP isP)
 
     fun exact2ApxType (D.LF (isP, A)) = 
                        let
 			 val (V, _) = Approx.classToApx A
 		       in 
-			 LF (rDummy, isP2Apx(isP), V)
+			 LF (rDummy, isP, V)
 		       end
-      | exact2ApxType (D.Meta (isP, F)) = Meta (rDummy, isP2Apx(isP), exact2ApxFormula F)
+      | exact2ApxType (D.Meta (isP, F)) = Meta (rDummy, isP, exact2ApxFormula F)
 
     and exact2ApxNormalDec (D.NormalDec (sLO, T)) = NormalDec (rDummy, sLO, exact2ApxType T)
 
@@ -156,8 +163,8 @@ structure DelphinApprox =
       | exact2ApxNewDec (D.NewDecMeta (sO, F)) = NewDecMeta (rDummy, sO, exact2ApxFormula F)
     and exact2ApxFormula F = exact2ApxFormulaN (D.whnfF F)
     and exact2ApxFormulaN (D.Top) = Top rDummy
-      | exact2ApxFormulaN (D.All (D.Visible, D, F)) = All (rDummy, exact2ApxNormalDec D, exact2ApxFormula F)
-      | exact2ApxFormulaN (D.All (D.Implicit, D, F)) = exact2ApxFormula F (* Approx type ignores implicitness *)
+      | exact2ApxFormulaN (D.All (D.Visible, W, D, F)) = All (rDummy, exact2ApxNormalDec D, exact2ApxFormula F)
+      | exact2ApxFormulaN (D.All (D.Implicit, W, D, F)) = exact2ApxFormula F (* Approx type ignores implicitness *)
       | exact2ApxFormulaN (D.Exists (D, F)) = Exists (rDummy, exact2ApxNormalDec D, exact2ApxFormula F)
       | exact2ApxFormulaN (D.Nabla (D, F)) = Nabla (rDummy, exact2ApxNewDec D, exact2ApxFormula F)
       | exact2ApxFormulaN (D.FormList Flist) = FormList (map exact2ApxFormula Flist)
@@ -172,21 +179,17 @@ structure DelphinApprox =
      * THIS CONVERSION IS ONLY INTENDED FOR PRINTING OUT THE RESULT
      * Similarly InjVars are just converted to "LF" as they are only being printed
      *)
-    fun isP2Exact(DelphinExtSyntax.Existential) = D.Existential
-      | isP2Exact(DelphinExtSyntax.Param) = D.Param
-      | isP2Exact(DelphinExtSyntax.OmittedParam) = D.newPVar()
-
-
     fun apx2ExactType (G, T) = apx2ExactTypeN (G, whnfT T)
     and apx2ExactTypeN (G, LF (_, isP, V)) =
              let
 	       val A = Approx.apxToClass (G, V, Approx.Type, true)
 	     in
-	       D.LF (isP2Exact isP, A)
+	       D.LF (isP, A)
 	     end
-      | apx2ExactTypeN (G, Meta (_, isP, F)) = D.Meta (isP2Exact isP, apx2ExactFormulaN (G, F))
-      | apx2ExactTypeN (G, SmartInj (r, A, _)) = apx2ExactTypeN (G, LF(r, DelphinExtSyntax.Existential, A))
+      | apx2ExactTypeN (G, Meta (_, isP, F)) = D.Meta (isP, apx2ExactFormulaN (G, F))
+      | apx2ExactTypeN (G, SmartInj (r, A, _, isP)) = apx2ExactTypeN (G, LF(r, isP, A))
 
+    (* WARNING:  This is only okay because it is used for printing *)
     and apx2ExactNormalDec (G, NormalDec (_, sLO, T)) = D.NormalDec (sLO, apx2ExactType (G, T))
 
     and apx2ExactNewDec (G, NewDecLF (_, sO, V)) = 
@@ -204,7 +207,7 @@ structure DelphinApprox =
 		 val D' = apx2ExactNormalDec (G,D)
 		 val G' = I.Decl(G, D.coerceDec (D.InstantiableDec D'))
 	       in
-		 D.All(D.Visible, D', apx2ExactFormula (G', F))
+		 D.All(D.Visible, NONE, D', apx2ExactFormula (G', F))
 	       end
 
       | apx2ExactFormulaN (G, Exists (_, D, F)) = 

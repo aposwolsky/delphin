@@ -136,15 +136,15 @@ local
       end
 
   (* fmtEqn assumes that G is a valid printing context *)
-  fun fmtEqn (I.Eqn (G, U1, U2)) = (* print context?? *)
+  fun fmtEqn (I.Eqn (Gglobal, G, U1, U2)) = (* print context?? *)
       sexp [Str "tw*eqn", F.Break, fmtExp (G, (U1, I.id)), F.Break, fmtExp (G, (U2, I.id))]
 
   (* fmtEqnName and fmtEqns do not assume that G is a valid printing
      context and will name or rename variables to make it so.
      fmtEqns should only be used for printing constraints.
   *)
-  fun fmtEqnName (I.Eqn (G, U1, U2)) =
-      fmtEqn (I.Eqn (Names.ctxLUName G, U1, U2))
+  fun fmtEqnName (I.Eqn (Gglobal, G, U1, U2)) =
+      fmtEqn (I.Eqn (Gglobal, Names.ctxLUName G, U1, U2))
 
 in
 

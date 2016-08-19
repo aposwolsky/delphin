@@ -1,0 +1,12 @@
+%%% Definition of Values
+
+value : exp -> type.  %name value P.
+
+val_z     : value z.
+val_lam   : value (lam E).
+val_s     : value V 
+	     -> value (s V).
+val_pair  : value V1 
+	     -> value V2
+	     -> value (pair V1 V2).
+

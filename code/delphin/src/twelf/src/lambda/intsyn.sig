@@ -28,6 +28,7 @@ sig
   val ctxPop : 'a Ctx -> 'a Ctx
   val ctxLookup: 'a Ctx * int -> 'a
   val ctxLength: 'a Ctx -> int
+  val mergeCtx : 'a Ctx * 'a Ctx -> 'a Ctx
 
   datatype Depend =                     (* Dependency information     *)
     No                                  (* P ::= No                   *)
@@ -54,7 +55,9 @@ sig
 
   and BoundVar =
       Fixed of int
-    | BVarVar of (BoundVar option) ref * Sub
+    | BVarVar of ((BoundVar option) ref * Exp * (int list)) * Sub (* (r : A, list) [t] *)
+                                       (* list contains indices in the context that are parameters.
+					* this can only be unified with these indices *)
 
   and Head =				(* Head:                      *)
     BVar of BoundVar			(* H ::= k                    *)
@@ -106,7 +109,7 @@ sig
 
   and Cnstr =				(* Constraint:                *)
     Solved                      	(* Cnstr ::= solved           *)
-  | Eqn      of Dec Ctx * Exp * Exp     (*         | G|-(U1 == U2)    *)
+  | Eqn      of Dec Ctx * Dec Ctx * Exp * Exp     (*   | Gglobal, G|-(U1 == U2)    *)
   | FgnCnstr of csid * FgnCnstr         (*         | (foreign)        *)
 
   and Status =                          (* Status of a constant:      *)
@@ -256,7 +259,7 @@ sig
   (* EVar related functions *)
 
   val newEVar    : dctx * Exp -> Exp	(* creates X:G|-V, []         *) 
-  val newEVarNdec    : dctx * Exp -> Exp (* first removes NDecs from G *)
+  val newEVarPruneNdec    : dctx * Exp -> Exp (* first removes NDecs from G *)
   val newAVar    : unit ->  Exp	        (* creates A (bare)           *) 
   val newTypeVar : dctx -> Exp		(* creates X:G|-type, []      *)
   val newLVar    : Sub * (cid * Sub) -> Block	
@@ -276,5 +279,7 @@ sig
   (* Expanding type definitions *)
   val targetFamOpt : Exp -> cid option  (* target type family or NONE *)
   val targetFam : Exp -> cid            (* target type family         *)
+
+  val getAllTypeFams : unit -> cid list
 
 end;  (* signature INTSYN *)

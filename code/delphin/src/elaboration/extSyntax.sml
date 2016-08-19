@@ -11,15 +11,20 @@ datatype Visibility
 datatype TopDec
     = LFTypeConstant of Paths.region * string * Kind * (Name option) * (Prec option) (* i.e. a : K *)
     | LFObjectConstant of Paths.region * LFDec * (Prec option)
-    | LFDefinition of Paths.region * LFDec * LFTerm * bool * (Prec option)
+    | LFDef            of Paths.region * LFDec * LFTerm * bool * (Prec option)
                                                             (* true if it is an abbreviation,
 						              false if it is a definition
 						            *)
-    | TypeDefinition of Paths.region * string * Formula
+    | TypeDef           of Paths.region * string * Formula
     | MetaFix of (Paths.region * NormalDec * Exp) list
     | MetaVal of Paths.region * (string option) * Exp (* it = ... *)
     | Use of string
     | LFUse of string
+    | WorldDec of WorldDeclaration
+
+and WorldDeclaration 
+    = Anything
+    | Variables of LFType list
 
 and Kind
   = Type of Paths.region
@@ -125,6 +130,7 @@ and Exp
    *)
   | LetVar      of Paths.region * Exp (* pattern *) * Exp * Exp
   | LetFun      of Paths.region * (Paths.region * NormalDec * Exp) list * Exp
+  | ExtendFun   of Paths.region * Exp * (CaseBranch list)
 
   
                
@@ -134,6 +140,7 @@ and CaseBranch
     | PopC of Paths.region * string * CaseBranch
     | Match of Paths.region * Exp * Exp (* pattern => result *)
     | MatchAnd of Paths.region * Exp * CaseBranch (* pattern => case *)
+    | ImplicitMatch of Paths.region * Exp (* only happens when converting internal syntax to external *)
 
 
 
@@ -203,12 +210,14 @@ fun getRegExp (VarString (r, _)) = r
   | getRegExp (LiftedApp (r, _, _)) = r
   | getRegExp (LetVar (r, _, _, _)) = r
   | getRegExp (LetFun (r, _, _)) = r
+  | getRegExp (ExtendFun (r, _, _)) = r
 
 fun getRegCaseBranch (Eps (r, _, _)) = r
   | getRegCaseBranch (NewC (r, _, _)) = r
   | getRegCaseBranch (PopC (r, _, _)) = r
   | getRegCaseBranch (Match (r, _, _)) = r
   | getRegCaseBranch (MatchAnd (r, _, _)) = r
+  | getRegCaseBranch (ImplicitMatch (r, _)) = r
 
 
 fun getRegNormalDec (NormalDec (r, _ , _)) = r

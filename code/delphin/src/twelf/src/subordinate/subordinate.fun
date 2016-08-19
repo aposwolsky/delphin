@@ -98,10 +98,10 @@ struct
     fun fSet (a, frozen) = fInsert (a, frozen)
 
     (* pre: a is not a type definition *)
-    fun checkFreeze (c, a) =
+    fun checkFreeze (strC, a) =
         if fGet a
         then raise Error ("Freezing violation: constant "
-                          ^ Names.qidToString (Names.constQid (c))
+                          ^ strC
                           ^ "\nextends type family "
                           ^ Names.qidToString (Names.constQid (a)))
         else ()
@@ -324,8 +324,8 @@ struct
 	    of NONE => (insertNewFam (c);
 			installKindN (V, c))
 	     | SOME a => (case IntSyn.sgnLookup c
-                            of IntSyn.ConDec _ => checkFreeze (c, a)
-                             | IntSyn.SkoDec _ => checkFreeze (c, a)
+                            of IntSyn.ConDec _ => checkFreeze (Names.qidToString (Names.constQid (c)), a)
+                             | IntSyn.SkoDec _ => checkFreeze (Names.qidToString (Names.constQid (c)), a)
                                (* FIX: skolem types should probably be created frozen -kw *)
                              | _ => ();
 			  (* simplified  Tue Mar 27 20:58:31 2001 -fp *)
@@ -463,6 +463,8 @@ struct
 
     val show = show
     val showDef = showDef
+
+    val checkFreeze = checkFreeze
 
   end (* local *)
 end; (* functor Subordinate *)

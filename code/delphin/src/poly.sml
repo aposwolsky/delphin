@@ -343,11 +343,14 @@ use "elaboration/tempSyntax.sml";
 use "elaboration/abstract.sig";
 use "elaboration/abstract.fun";
 use "elaboration/abstract.sml";
-use "elaboration/printDelphinExt.sml";
-use "elaboration/printDelphinInt.sml";
+use "elaboration/abstract2.fun";
+use "elaboration/world.fun";
 use "elaboration/unifyDelphin.fun";
 use "elaboration/unifyDelphin.sml";
 use "elaboration/normalizeDelphin.sml";
+use "elaboration/printDelphinExt.sml";
+use "elaboration/printDelphinInt.sml";
+use "elaboration/coverage.fun";
 
 use "typecheck/typecheck.sig";
 use "typecheck/typecheck.fun";

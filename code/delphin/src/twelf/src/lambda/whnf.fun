@@ -14,7 +14,7 @@ struct
      whnf ::= (L, s) | (Pi DP. U, s) | (Root (#k(b), S))
             | (Root(n,S), id) | (Root(c,S), id) | (Root(d,S), id) | (Root(F[s'], S), id)
             | (Root(fgnC,S), id) where fgnC is a foreign constant
-            | (Root(BvarVar r,S), is) where r is a ref NONE
+            | (Root(BvarVar (r, A),S), id) where r is a ref NONE
             | (Lam D. U, s) | (X, s) where X is uninstantiated, X of base type
                                      during type reconstruction, X might have variable type
             | (FgnExp, id) where FgnExp is a foreign expression
@@ -45,8 +45,8 @@ struct
 
     (* Returns either (Fixed k, s) or (BVarVar _, id) *)
     fun whnfBVar (Fixed k, s) = (Fixed k, s)
-      | whnfBVar (BVarVar (ref (SOME B), t), s) = whnfBVar (B, comp(t, s))
-      | whnfBVar (BVarVar (r as ref NONE, t), s) = (BVarVar (r, comp(t, s)), id)
+      | whnfBVar (BVarVar ((ref (SOME B), _, _), t), s) = whnfBVar (B, comp(t, s))
+      | whnfBVar (BVarVar ((r as ref NONE, A, list), t), s) = (BVarVar ((r, A, list), comp(t, s)), id)
 
 
     (* etaContract (U, s, n) = k'
@@ -272,7 +272,7 @@ struct
 		    | Exp (U) => whnfRedex (whnf (U, id), (S, s))
 		    | Undef => raise Domain)
                     (* Undef should be impossible *)
-	    | (B as BVarVar (r, s'), _ (* id *)) => (Root (BVar B, SClo(S, s)), id))
+	    | (B, _ (* id *)) => (Root (BVar B, SClo(S, s)), id))
 
       | whnfRoot ((Proj (B as Bidx _, i), S), s) = 
 	 (* could blockSub (B, s) return instantiated LVar ? *)
@@ -368,7 +368,7 @@ struct
         in
           Lam (D', newLoweredEVar (Decl (G, D'), (V, dot1 s)))
         end
-      | newLoweredEVarW (G, Vs) = newEVarNdec (G, EClo Vs)
+      | newLoweredEVarW (G, Vs) = newEVarPruneNdec (G, EClo Vs)
 
     and newLoweredEVar (G, Vs) = newLoweredEVarW (G, whnfExpandDef Vs)
 

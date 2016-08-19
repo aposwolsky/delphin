@@ -9,26 +9,28 @@ signature DELPHIN_ELABORATOR =
     val setFilename : string -> unit
     val getFilename : unit -> string
 
-    val convertMeta0 : bool * (DelphinIntSyntax.Dec IntSyn.Ctx) * DelphinExtSyntax.Exp
+    val convertMeta0 : bool  * DelphinIntSyntax.decCtx * DelphinExtSyntax.Exp
                        -> DelphinIntSyntax.Exp * DelphinIntSyntax.Types
 
-    val convertFormula0 : (DelphinIntSyntax.Dec IntSyn.Ctx) * DelphinExtSyntax.Formula 
+    val convertFormula0 : DelphinIntSyntax.decCtx * DelphinExtSyntax.Formula 
                            -> DelphinApprox.Formula * DelphinIntSyntax.Formula
 
     val convertFixList0 :   
-      bool * (DelphinIntSyntax.Dec IntSyn.Ctx)
+      bool *  DelphinIntSyntax.decCtx
       * (Paths.region * DelphinExtSyntax.NormalDec * DelphinExtSyntax.Exp) list
       -> DelphinIntSyntax.Exp
+
+    val convertWorld : DelphinExtSyntax.WorldDeclaration -> DelphinIntSyntax.World
 
     val saveData : unit
           -> string * int * DelphinApprox.Formula StringRedBlackTree.Table * 
              (int * DelphinIntSyntax.Formula) StringRedBlackTree.Table * 
-             DelphinIntSyntax.Dec IntSyn.Ctx
+             DelphinIntSyntax.decCtx
 
     val restoreData : 
           string * int * DelphinApprox.Formula StringRedBlackTree.Table * 
           (int * DelphinIntSyntax.Formula) StringRedBlackTree.Table * 
-          DelphinIntSyntax.Dec IntSyn.Ctx
+          DelphinIntSyntax.decCtx
           -> unit
 
 

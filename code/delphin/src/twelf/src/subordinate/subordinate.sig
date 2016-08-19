@@ -27,4 +27,6 @@ sig
   val show : unit -> unit
   val showDef : unit -> unit
 
+  val checkFreeze : string * IntSyn.cid -> unit
+
 end;  (* signature SUBORDINATE *)

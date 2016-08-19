@@ -19,11 +19,11 @@ structure PrintDelphinExt =
     val colonPrec = 73
     val rtArrowPrec = 76
     val ltArrowPrec = 77
+    val withPrec = 79
     val andPrec = 80 (* for "*" ","  "and" *)
 
 
     val popPrec = 85
-    val poundPrec = 85
     val fstsndPrec = 85
     val appPrec = 90
     val maxPrec = 100
@@ -460,12 +460,24 @@ structure PrintDelphinExt =
 						SOME(Fmt.String("\\")), (Fmt.String s, maxPrec))),   appPrec), isDetailed)
 
 
-      | caseBranchToFormat0 (D.Match (_, E1, E2), k, isDetailed) =
+      | caseBranchToFormat0 (D.Match (_, E1, E2), k, true) =
 		     ExpToFormat0 (E1, 
 			 fn (fmt1, prec1) =>  ExpToFormat0(E2, 
 			 fn (fmt2, prec2) => k (fmtinfix Fmt.HVbox (Right, eqArrowPrec, ((fmt1, prec1),
-						SOME(Fmt.String("=>")), (fmt2, prec2))),   eqArrowPrec), isDetailed),
-				   isDetailed)
+						SOME(Fmt.String("=>")), (fmt2, prec2))),   eqArrowPrec), true),
+				   true)
+
+
+      | caseBranchToFormat0 (D.Match (_, E1, E2), k, false) =
+		     ExpToFormat0 (E1, 
+			 fn (fmt1, prec1) =>  k (fmtinfix Fmt.HVbox (Right, eqArrowPrec, ((fmt1, prec1),
+						SOME(Fmt.String("=>")), (Fmt.String("..."), maxPrec))),   eqArrowPrec), false)
+
+
+      | caseBranchToFormat0 (D.ImplicitMatch (_, E), k, true) = ExpToFormat0 (E, k, true)
+
+      | caseBranchToFormat0 (D.ImplicitMatch (_, E), k, false) = k (Fmt.String("..."), maxPrec)
+
 
       (*
       | caseBranchToFormat0 (D.MatchAnd (_, E1, C), k, isDetailed) =
@@ -621,6 +633,27 @@ structure PrintDelphinExt =
       | ExpToFormat0 (D.Fix (_, nil), k, isDetailed) = raise Domain (* empty list of function s*)
       | ExpToFormat0 (D.Fix (_, xs), k, isDetailed) = k (funFormat (xs, isDetailed), minPrec)
 
+      | ExpToFormat0 (D.ExtendFun (r, E, cList), k, isDetailed) = 
+		   let
+                       (* same as caselistToFormat but does not print the "fn" *)
+                       fun caseListToFormat2 ([], isDetailed) = Fmt.String(" . ") 
+			 | caseListToFormat2 ((C:: CS), isDetailed) =
+			         let 
+				   fun caseBranchToFormat' x = Fmt.Hbox [Fmt.String(" |"), Fmt.Break, caseBranchToFormat (x, isDetailed)]
+				   val caseListFmt = map caseBranchToFormat' CS
+				   val caseFmt = Fmt.Hbox [Fmt.String("  "), Fmt.Break, caseBranchToFormat (C, isDetailed)] 
+				 in   
+				   Fmt.Vbox0 0 1 (addBreaks (caseFmt :: caseListFmt))
+				 end
+		   in
+		     ExpToFormat0 (E, 
+				   fn (fmt1, prec1) => k (fmtinfix Fmt.HOVbox (Right, withPrec, ((fmt1, prec1),
+									SOME(Fmt.String("with")), (caseListToFormat2 (cList, true), minPrec))),
+						       withPrec),
+				   isDetailed)
+		   end
+
+
 
     (* LetFormat is used to handle embedded lets.
      * Instead of printing let val s = e1 in let val s2 = e2 in e3 end
@@ -680,6 +713,20 @@ structure PrintDelphinExt =
       | nameOptStr (SOME (D.OneName (_, s))) = " %name " ^ s
       | nameOptStr (SOME (D.TwoNames (_, s1, s2))) = " %name " ^ s1 ^ " " ^ s2
 
+    fun varListToFormat nil = [Fmt.String(".")]
+      | varListToFormat [lftype] = [Fmt.String "<", lftypeToFormat0 lftype, Fmt.String ">"]
+      | varListToFormat (lftype :: lfs) = 
+                   let
+		     val fmtHd = Fmt.Hbox[Fmt.String "<", lftypeToFormat0 lftype, Fmt.String ">", Fmt.Break, Fmt.String(",")]
+		     val fmtRest = varListToFormat lfs
+		   in
+		     fmtHd :: Fmt.Break :: fmtRest
+		   end
+
+    fun worldToFormat (D.Anything) = Fmt.String("*")
+      | worldToFormat (D.Variables [lftype]) = lftypeToFormat0 lftype
+      | worldToFormat (D.Variables lfs) = Fmt.HOVbox(varListToFormat lfs)
+      
 
     fun topDecFmt (D.LFTypeConstant (r,s, kind, nameopt, precopt)) = Fmt.Vbox[Fmt.HVbox[Fmt.String("sig <"), Fmt.String(s), Fmt.Space, 
 									       Fmt.String(":"), Fmt.Break,
@@ -690,18 +737,21 @@ structure PrintDelphinExt =
       | topDecFmt (D.LFObjectConstant (r, lfdec, precopt)) = 
                                      Fmt.Vbox[Fmt.HVbox[Fmt.String("sig <"), lfdecToFormat(lfdec), Fmt.String(">"),
 							Fmt.String(precOptStr(precopt))], Fmt.String(";"), Fmt.Break, Fmt.Break]
-      | topDecFmt (D.LFDefinition (r, lfdec, lfterm, false, precopt)) = 
+      | topDecFmt (D.LFDef (r, lfdec, lfterm, false, precopt)) = 
                                      Fmt.Vbox[Fmt.HVbox[Fmt.String("sig <"), lfdecToFormat(lfdec), Fmt.String(" = "), 
 							lftermToFormat0(lfterm), Fmt.String(">"), Fmt.String(precOptStr(precopt))], Fmt.String(";"), Fmt.Break, Fmt.Break]
-      | topDecFmt (D.LFDefinition (r, lfdec, lfterm, true, precopt)) = 
+      | topDecFmt (D.LFDef (r, lfdec, lfterm, true, precopt)) = 
                                      Fmt.Vbox[Fmt.HVbox[Fmt.String("sig <"), lfdecToFormat(lfdec), Fmt.String(" = "), 
 							lftermToFormat0(lfterm), Fmt.String(" %abbrev "), Fmt.String(">"), Fmt.String(precOptStr(precopt))], 
 					      Fmt.String(";"), Fmt.Break, Fmt.Break]
 
-      | topDecFmt (D.TypeDefinition (r, name, F)) =
+      | topDecFmt (D.TypeDef  (r, name, F)) =
                                      Fmt.Vbox[Fmt.HVbox[Fmt.String("type "), Fmt.String(name), Fmt.String(" = "), 
 							FormulaToFormat0 (F, baseK)], 
 					      Fmt.String(";"), Fmt.Break, Fmt.Break]
+
+      | topDecFmt (D.WorldDec W) = Fmt.Vbox[Fmt.HVbox[Fmt.String("params = "), 
+							worldToFormat W], Fmt.String(";"), Fmt.Break, Fmt.Break]
 
       | topDecFmt (D.MetaFix xs) =  funFormat (xs, true)
       | topDecFmt (D.MetaVal (_, NONE, E)) = Fmt.Vbox[Fmt.HVbox[Fmt.String("val it = "),Fmt.Break, ExpToFormat0(E, baseK, true)], 

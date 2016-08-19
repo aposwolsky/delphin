@@ -88,7 +88,7 @@ struct
 	in
 	  lk (Queue.toList (Array.sub (indexArray, a)))
 	end
-
+					    
   in
 
     val reset = reset

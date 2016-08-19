@@ -9,12 +9,12 @@ struct
 structure I = IntSyn
 
 datatype Types
-  = LF of Paths.region * DelphinExtSyntax.isParam * I.Exp
-  | Meta of Paths.region * DelphinExtSyntax.isParam * Formula
+  = LF of Paths.region * DelphinIntSyntax.isParam * I.Exp
+  | Meta of Paths.region * DelphinIntSyntax.isParam * Formula
 
 and Formula
   = Top     of Paths.region
-  | All     of Paths.region * DelphinExtSyntax.Visibility * NormalDec * Formula
+  | All     of Paths.region * DelphinIntSyntax.Visibility * NormalDec * Formula
   | Exists  of Paths.region * NormalDec * Formula 
   | Nabla   of Paths.region * NewDec * Formula
   | FormulaString of Paths.region * string
@@ -36,11 +36,11 @@ and Dec
 
 and Exp
   = VarInt    of Paths.region * int 
-  | Quote  of Paths.region * I.Exp * I.Exp * DelphinApprox.SmartInj (* (U : V)  *)
+  | Quote  of Paths.region * I.Exp * I.Exp * DelphinApprox.SmartInj * DelphinIntSyntax.isParam (* (U : V)  *)
   | Unit   of Paths.region
   | Lam    of Paths.region * (CaseBranch list)
   | New    of Paths.region * NewDec * Exp
-  | App    of Paths.region * DelphinExtSyntax.Visibility * Exp * Exp
+  | App    of Paths.region * DelphinIntSyntax.Visibility * Exp * Exp
   | Pair   of Paths.region * Exp * Exp
   | Proj   of Paths.region * Exp * int
   | Pop    of Paths.region * int * Exp
@@ -59,6 +59,7 @@ and Exp
   | LetVar of Paths.region * NormalDec * Exp * Exp
   *)
   | LetFun of Paths.region * (Paths.region * NormalDec * Exp) list * Exp
+  | ExtendFun of Paths.region * Exp * (CaseBranch list)
 
   
                
@@ -66,8 +67,8 @@ and CaseBranch
     = Eps of Paths.region * NormalDec * CaseBranch
     | NewC of Paths.region * NewDec * CaseBranch
     | PopC of Paths.region * int * CaseBranch
-    | Match of Paths.region * Exp * Exp (* pattern => result *)
-    | MatchAnd of Paths.region * DelphinExtSyntax.Visibility * Exp * CaseBranch (* pattern => case *)
+    | Match of Paths.region * DelphinIntSyntax.Visibility * Exp * Exp (* pattern => result *)
+    | MatchAnd of Paths.region * DelphinIntSyntax.Visibility * Exp * CaseBranch (* pattern => case *)
 
 
 
@@ -131,7 +132,7 @@ fun substCase (Eps (r, D, C), t) = Eps (r, substNormalDec(D, coerceSub t), subst
 			   in
 			     PopC (r, j, substCase(C,t'))
 			   end
-  | substCase (Match (r, patE, resE), t) = Match (r, substE(patE, t), substE(resE, t))
+  | substCase (Match (r, visible, patE, resE), t) = Match (r, visible, substE(patE, t), substE(resE, t))
   | substCase (MatchAnd (r, visible, patE, C), t) = MatchAnd (r, visible, substE(patE, t), substCase(C, t))
 
 
@@ -141,11 +142,11 @@ and substE(E, id) = E
   | substE(VarInt (r,i), Dot(_, t)) = substE(VarInt (r,(i-1)), t)
   | substE(VarInt (r,i), Shift id) = VarInt (r, i+1)
   | substE(VarInt (r,i), Shift t) = substE(substE(VarInt (r,i), t), Shift id)
-  | substE(Quote (r,M,A, I), t) = 
+  | substE(Quote (r,M,A, I, isP), t) = 
              let 
 	       val t' = coerceSub t
 	     in
-	       Quote (r, I.EClo(M, t'), I.EClo(A, t'), I)
+	       Quote (r, I.EClo(M, t'), I.EClo(A, t'), I, isP)
 	     end
 
   | substE(Unit r, _) = Unit r
@@ -156,9 +157,11 @@ and substE(E, id) = E
 			  Lam (r, Clist')
 			end
 
+
   | substE(New (r, D, E), t) = New (r, substNewDec(D, coerceSub t), substE (E, dot1 t))
   | substE(App (r, visible, E1, E2), t) = App (r, visible, substE(E1, t), substE(E2, t))
   | substE(Pair (r, E1, E2), t) = Pair (r, substE(E1, t), substE(E2, t))
+
   | substE(Proj (r, E,i), t) = Proj(r, substE(E,t), i)
 			
   | substE(Pop (r, i, E), t) = 
@@ -193,6 +196,10 @@ and substE(E, id) = E
   | substE(LetFun (r, funlist, E2), t) = LetFun (r,
 						 substFunList(funlist, t),
 						 substE(E2, dot1 t))
+
+  | substE(ExtendFun (r, E, Clist), t) = ExtendFun (r,
+						    substE(E, t),
+						    map (fn C => substCase(C, t)) Clist)
 								  
 
 

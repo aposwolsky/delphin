@@ -296,7 +296,7 @@ struct
         val Uni L = whnf L
       in
         case whnfUni L
-          of Level 1 => I.newEVarNdec (G, I.EClo Vs)
+          of Level 1 => I.newEVarPruneNdec (G, I.EClo Vs)
            | Level 2 =>
              (* U must be a CVar *)
              let
@@ -311,7 +311,7 @@ struct
              end
       end
     | apxToExactW (G, U, Vs (* an atomic type, not Def *), allowed) =
-        I.newEVarNdec (G, I.EClo Vs)
+        I.newEVarPruneNdec (G, I.EClo Vs)
   and apxToExact (G, U, Vs, allowed) = apxToExactW (G, U, Whnf.whnfExpandDef Vs, allowed)
 
   (* matching for the approximate language *)

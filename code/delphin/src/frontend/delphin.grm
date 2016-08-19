@@ -30,6 +30,8 @@ val join = Paths.join
        | BAR of Paths.region
        | BACKSLASH of Paths.region
        | AND of Paths.region (* for mutual recursion *)
+       | PARAMS of Paths.region (* for world declaration *)
+       | WITH of Paths.region (* for automatic function extensions *)
        | TYPE of Paths.region 
        | FUN of Paths.region
        | UNIT of Paths.region
@@ -71,6 +73,7 @@ val join = Paths.join
 %nonterm    start of D.DelphinProgram
 	    | idopt of Paths.region * (string option)
 	    | delphinprogram of D.DelphinProgram
+	    | varList of D.LFType list
             | topdec of D.TopDec
 	    | constant of D.TopDec
 	    | constants of D.DelphinProgram
@@ -86,6 +89,7 @@ val join = Paths.join
 	    | metaterm of D.Exp
 	    | letlist of D.Exp
 	    | lftype of D.LFType
+	    | lftypePat of D.LFType
 	    | formula of D.Formula
 	    | precOption of D.Prec option
 	    | optSemis of unit
@@ -125,10 +129,12 @@ val join = Paths.join
 %right RTARROW
 %left LTARROW
 
+%right WITH
 %right COMMA STAR AND
 
 
-%nonassoc POP POUND
+(* %nonassoc POP POUND *)
+%nonassoc POP
 
 (*
  * Finally, we need to specify that Application
@@ -139,6 +145,7 @@ val join = Paths.join
 %nonassoc ID DIGITS RIGHT LEFT LTANGLE LTBRACKET  LTPAREN FN CASE LET LTBRACE UNDERSCORE (* LTBRACE is for new *)
 %left AT BACKSLASH (* AT is lifted application *) (* BACKSLASH is another way to write pop *)
 
+%nonassoc POUND
 
 %start start
 
@@ -147,15 +154,28 @@ val join = Paths.join
 start		: optSemis delphinprogram
 			(delphinprogram)
 
+
 delphinprogram	: 
 			(nil)
 		| SIG constants optSemis delphinprogram
 			(constants @ delphinprogram)
 		| TYPE ID EQUAL formula optSemis delphinprogram
-			( (D. TypeDefinition (join(TYPE, D.getRegFormula formula), deReg ID, formula))::delphinprogram)
-
+			( (D.TypeDef (join(TYPE, D.getRegFormula formula), deReg ID, formula))::delphinprogram)
+		| PARAMS EQUAL STAR SEMICOLON optSemis delphinprogram
+			( (D.WorldDec (D.Anything)) :: delphinprogram)
+		| PARAMS EQUAL varList SEMICOLON optSemis delphinprogram
+			( (D.WorldDec (D.Variables varList)) :: delphinprogram)
 		| topdec delphinprogram
 			(topdec::delphinprogram)
+
+
+
+varList		: DOT
+			(nil)
+		| LTANGLE lftypePat RTANGLE
+			([lftypePat])
+		| LTANGLE lftypePat RTANGLE COMMA varList
+			(lftypePat :: varList)
 
 optSemis	:
 			()
@@ -190,12 +210,12 @@ constant	: USE
 			)
 
 		| LTANGLE lfdecNoOmit EQUAL lfterm RTANGLE ABBREV precOption
-		       ( D.LFDefinition(join(D.getRegLFDec lfdecNoOmit, D.getRegLFTerm lfterm),
+		       ( D.LFDef (join(D.getRegLFDec lfdecNoOmit, D.getRegLFTerm lfterm),
 					lfdecNoOmit,
 					lfterm, true, precOption))
 
 		| LTANGLE lfdecNoOmit EQUAL lfterm RTANGLE precOption
-		       ( D.LFDefinition(join(D.getRegLFDec lfdecNoOmit, D.getRegLFTerm lfterm),
+		       ( D.LFDef (join(D.getRegLFDec lfdecNoOmit, D.getRegLFTerm lfterm),
 					lfdecNoOmit,
 					lfterm, false, precOption))
 
@@ -367,7 +387,7 @@ formula		: UNIT
 			   D.NormalDec(join(DBL_LTANGLE,DBL_RTANGLE),SOME(deReg ID),D.LF(D.getRegLFType(lftype),D.Existential, lftype)),
 			  formula))
 
-		| DBL_LTANGLE ID DBL_RTANGLE RTARROW formula	
+		| DBL_LTANGLE ID DBL_RTANGLE RTARROW formula
 			 ( let
 				val r = getReg ID
 			   in
@@ -378,6 +398,22 @@ formula		: UNIT
 			  formula)
 
 			   end)
+
+	       (* Cannot allow IMPLICIT parameter
+		     Such supoprt would require (1) abstract.fun to handle BVarVar
+				(2) LF Unification would need to be revisited.
+				  Right now, BVarVars exist during coverage (where we do a "match" to make sure type is ok)
+			         or they exist when the entire context is only Parameters..  We really need more information
+				 at the LF level to tell that a BVarVar is not instantiated with a non-parameter.
+
+		| DBL_LTANGLE ID COLON lftype POUND DBL_RTANGLE RTARROW formula	
+			 (D.All(
+			   join(DBL_LTANGLE, D.getRegFormula(formula)), D.Implicit,			
+			   D.NormalDec(join(DBL_LTANGLE,DBL_RTANGLE),SOME(deReg ID),D.LF(D.getRegLFType(lftype),D.Param, lftype)),
+			  formula))
+	        *)
+
+
 
 	
 		| LTANGLE ID COLON lftype RTANGLE RTARROW formula
@@ -575,6 +611,36 @@ newdec		: LTANGLE ID COLON lftype POUND RTANGLE
 			 end)
 
 
+lftypePat	: ID
+			(D.TypeID ID)
+
+		| lftypePat lftermPat
+			%prec AT (* AT is an application *)
+			(D.TypeApp
+			(join(D.getRegLFType(lftypePat), D.getRegLFTerm(lftermPat)),
+			lftypePat, lftermPat))
+
+		| LTBRACE lfdec RTBRACE lftypePat
+			(D.PiType(
+			 join(LTBRACE,D.getRegLFType(lftypePat)), 
+			 lfdec, 
+			 lftypePat))
+
+		| lftypePat RTARROW lftypePat
+			(D.RtArrow 
+			(join(D.getRegLFType(lftypePat1), D.getRegLFType(lftypePat2)),
+			 lftypePat1, lftypePat2))
+		| lftypePat LTARROW lftypePat
+			(D.LtArrow 
+			(join(D.getRegLFType(lftypePat1), D.getRegLFType(lftypePat2)),
+			 lftypePat1, lftypePat2))
+
+		| UNDERSCORE
+			(D.OmitType (UNDERSCORE))
+
+		| LTPAREN lftypePat RTPAREN
+			(D.ParenType (join(LTPAREN,RTPAREN), lftypePat))
+
 lftermPat	: ID
 			(D.ObjectID (getReg ID, false, deReg ID))
 		| ID POUND
@@ -586,13 +652,14 @@ lftermPat	: ID
 			(D.LFApp 
  			(join(D.getRegLFTerm(lftermPat1), D.getRegLFTerm(lftermPat2)),
 			 lftermPat1,lftermPat2))
-	        | lftermPat COLON lftype
-			(D.Of
-			(join(D.getRegLFTerm(lftermPat), D.getRegLFType(lftype)),
-			lftermPat,
-			lftype))
 
-		| lftermPat COLON lftype POUND
+	        | lftermPat COLON lftypePat
+			(D.Of
+			(join(D.getRegLFTerm(lftermPat), D.getRegLFType(lftypePat)),
+			lftermPat,
+			lftypePat))
+
+		| lftermPat COLON lftypePat POUND
 			(
                            let
 			        fun makeParam (D.ObjectID(r,_,s)) = D.ObjectID(r, true, s)
@@ -602,17 +669,16 @@ lftermPat	: ID
 
 				val E = makeParam lftermPat
 			   in
-				D.Of (r, E, lftype)
+				D.Of (r, E, lftypePat)
 			   end
                         )
 
-
-	        | lftermPat COLON LTANGLE lftype RTANGLE
+	        | lftermPat COLON LTANGLE lftypePat RTANGLE
 			(* This rule isn't necessary, but makes it look nicer *)
 			(D.Of
-			(join(D.getRegLFTerm(lftermPat), D.getRegLFType(lftype)),
+			(join(D.getRegLFTerm(lftermPat), D.getRegLFType(lftypePat)),
 			lftermPat,
-			lftype))
+			lftypePat))
 		| UNDERSCORE
 			(D.OmitTerm (UNDERSCORE))
 		| LTPAREN lftermPat RTPAREN
@@ -658,8 +724,8 @@ metaPattern	: ID
 			(D.New(join(LTBRACE, D.getRegExp(metaPattern)), 
 			      newdec, metaPattern))
 
-		| metaPattern BACKSLASH ID
-			(D.Pop(join(D.getRegExp(metaPattern), getReg ID), deReg ID, metaPattern))
+		| metaPattern BACKSLASH popID
+			(D.Pop(join(D.getRegExp(metaPattern), getReg popID), deReg popID, metaPattern))
 
 		| POP popID metaPattern
 			(D.Pop(join(POP,D.getRegExp(metaPattern)), deReg popID, metaPattern))
@@ -697,8 +763,8 @@ metaterm	: ID
 			 metaterm1, 
 			 metaterm2))
 
-		| metaterm BACKSLASH ID
-			(D.Pop(join(D.getRegExp(metaterm), getReg ID), deReg ID, metaterm))
+		| metaterm BACKSLASH popID
+			(D.Pop(join(D.getRegExp(metaterm), getReg popID), deReg popID, metaterm))
 
 		| POP popID metaterm
 			(D.Pop(join(POP,D.getRegExp(metaterm)), deReg popID, metaterm))
@@ -785,6 +851,21 @@ metaterm	: ID
 			 end)
 
 
+		| metaterm WITH DOT
+			(D.ExtendFun (join(D.getRegExp metaterm, DOT), metaterm, nil))
+
+
+		| metaterm WITH nonEmpCaseList
+			(  let fun getRegC [C] = D.getRegCaseBranch C
+				| getRegC (C::cs) = join(D.getRegCaseBranch C, getRegC cs)
+				| getRegC _ = raise Domain 
+			
+                               val r = join(D.getRegExp metaterm, getRegC nonEmpCaseList)
+			    in
+				D.ExtendFun (r, metaterm, nonEmpCaseList)
+			    end)
+
+
 
 
 letlist		: IN metaterm
@@ -824,8 +905,8 @@ metacase	: LTBRACKET normaldec RTBRACKET metacase
 			(D.Eps(join(LTBRACKET, D.getRegCaseBranch metacase), normaldec, metacase))
 		| LTBRACE newdec RTBRACE metacase
 			(D.NewC(join(LTBRACE, D.getRegCaseBranch metacase), newdec, metacase))
-		| metacase BACKSLASH ID
-			(D.PopC(join(D.getRegCaseBranch(metacase), getReg ID), deReg ID, metacase))
+		| metacase BACKSLASH popID
+			(D.PopC(join(D.getRegCaseBranch(metacase), getReg popID), deReg popID, metacase))
 		| POP popID metacase
 			(D.PopC(join(POP,D.getRegCaseBranch(metacase)), deReg popID, metacase))
 		| metaPattern EQARROW metaterm
@@ -843,6 +924,9 @@ metacase	: LTBRACKET normaldec RTBRACKET metacase
 
 (* this is useful so it parses "pop x pop u E Y" as "pop x pop u (E Y)"
  * otherwise it can be parsed as "pop x pop (u E) Y"
+ * ABP:  Additionally, we now allow you to specify an ID as <ID> as well... 
  *)
 popID		: ID
 			(ID)
+		| LTANGLE ID RTANGLE
+			(ID)  (* WARNING:  Perhaps some ambiguity if using meta-level parameters!! *)

@@ -1,3 +1,15 @@
+Email Delphin to kss@itu.dk
+
+(**) Search/Fix uses of "PopC"!!!!!!!
+
+(**) printing out in "world.fun".. search for print statement..
+
+(**) I do not like LF unification.. pattern substitutions not checked properly. unification
+     can make a non-pattern sub. into one and this is not reflected anywhere.
+
+(**) Do not have support of "implicit" parameter functions.
+     Such supoprt would require (1) abstract.fun to handle BVarVar
+
 (**) Add more support of "_" in patterns.
      For example, we do not allow patterns of the form ({<x>} _)
      This is NOT equivalent to ({<x>} E) as the E cannot depend on x..
@@ -5,29 +17,22 @@
      This is analogous to the "_" on the LF level...
      But we should decide how to implement this.
 
-(**) Work on specifying parameters as x# in patterns.
-     The problem is more with syntax than with inference!
-     Currently it has some limited support of x# in patterns,
-     But if we have a pattern <x#> it ONLY allows access via "<x>", but
-     we may want it also for "x" of type A#... Maybe we should change the syntax?
 
-(**) EVars are raised to everything in the context, this can be a problem in forming
+
+(**)FIXED!!! EVars are raised to everything in the context, this can be a problem in forming
      non-patterns.. For instance:
+ sig <exp : type> <lam : (exp -> exp) -> exp> <app : exp -> exp -> exp> ;
+
 	fun foo : <exp> -> <exp> = 
 	   fn [<E : exp -> exp>] (<lam ([x:exp] E x)> => (fn ({<x : exp#>} <_> => <lam ([x:exp] x)>)) ({<x : exp#>} foo <E x>));
      This will abstract the pattern variable as dependend on E as well.
      But the programmer can specify it more precisely by writing the pattern as "G x" instead of "_"
      ****
-     Solution One:  in type reconstruction build evars in a context of only parameters!!!
-                Problem:  If the type is dependent on an "explicit" pattern-variable,
-	                  then it would fail in type reconstruction.
-     Solution Two:  EVars should NOT contain the entire context that they make sense in..
-			Rather, they should just contain the "relative" extension, i.e.
-			exactly what it expects to be abstracted...
-                    However, The current invariant is that the whole context is attached..
-     Solution Three:  Disallow explicit declaration of non-parameter pattern variables
-		      (as it is not an issue for parameter pattern-variables)
-		      and the non-parameter pattern vars are always inferrible.
+     Solution:  Since EVars contain the entire context, the phase of collection determines
+	        which part of the context needs to "really" be abstracted.  This analyzis ALL uses of 
+	        the EVar and prunes out identical spines.  That is, it will find the common tail of the spine for
+	        all EVars.  For example let's say that EVar r would appear as r@(S,SS) and r@(S2,SS).  As long as
+	        everything in SS is in the global context we can just drop the SS.
 
 Things to explain
 (1) Scope of FVars are to the nearest "fn"

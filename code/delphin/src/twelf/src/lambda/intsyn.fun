@@ -37,6 +37,10 @@ struct
       in
 	ctxLength' (G, 0)
       end
+
+  fun mergeCtx (Gglobal, Null) = Gglobal
+    | mergeCtx (Gglobal, Decl(G, D)) = Decl(mergeCtx(Gglobal, G), D)
+
     
   type FgnExp = exn                     (* foreign expression representation *)
   exception UnexpectedFgnExp of FgnExp
@@ -77,7 +81,9 @@ struct
 
   and BoundVar =
       Fixed of int
-    | BVarVar of (BoundVar option) ref * Sub
+    | BVarVar of ((BoundVar option) ref * Exp * (int list)) * Sub (* (r : A, list) [t] *)
+                                       (* list contains indices in the context that are parameters.
+					* this can only be unified with these indices *)
 
   and Head =				(* Head:                      *)
     BVar of BoundVar			(* H ::= k                    *)
@@ -121,7 +127,7 @@ struct
 
   and Cnstr =				(* Constraint:                *)
     Solved                      	(* Cnstr ::= solved           *)
-  | Eqn      of Dec Ctx * Exp * Exp     (*         | G|-(U1 == U2)    *)
+  | Eqn      of Dec Ctx * Dec Ctx * Exp * Exp     (*   | Gglobal, G|-(U1 == U2)    *)
   | FgnCnstr of csid * FgnCnstr         (*         | (foreign)        *)
 
   and Status =                          (* Status of a constant:      *)
@@ -354,6 +360,8 @@ struct
     (* 0 <= mid < !nextMid *)
     fun sgnStructLookup (mid) = Array.sub (sgnStructArray, mid)
 
+    fun currentNextCid () = !nextCid
+
   end
 
   fun constDef (d) =
@@ -569,7 +577,7 @@ struct
   fun newEVar (G, V) = EVar(ref NONE, G, V, ref nil)
 
   (* Gets rid of NDecs in G *)
-  fun newEVarNdec (G, V) =
+  fun newEVarPruneNdec (G, V) =
         let
 	  fun weaken (Null) = id
 	    | weaken (Decl (G', NDec)) = comp (weaken G', shift)
@@ -614,6 +622,7 @@ struct
 	  val iw = invert w                (* G' |- iw : G *)
 	  val G' = strengthen(iw, G)
 	in
+	  (* WARNING:  iw contains Undefs.. maybe we should do invertExp here instead... *)
 	  EClo(EVar(ref NONE, G', EClo(V, iw), ref nil), w)
 	end
 
@@ -697,6 +706,16 @@ struct
      as in targetFamOpt, except V must be a valid type
   *)
   fun targetFam (A) = valOf (targetFamOpt A)
+
+  fun getAllTypeFams () = 
+       let
+	 fun getAllTypeFams(~1) = []
+	   | getAllTypeFams k = case (targetFamOpt (conDecType (sgnLookup k)))
+	                        of NONE => k :: (getAllTypeFams (k-1))
+				 | _ => getAllTypeFams (k-1)
+       in
+	 getAllTypeFams (currentNextCid() - 1)
+       end
                       
 end;  (* functor IntSyn *)
 

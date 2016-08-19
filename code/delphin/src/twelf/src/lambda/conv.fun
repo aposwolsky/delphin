@@ -37,7 +37,7 @@ struct
           (case (H1, H2) of 
 	     (BVar (Fixed k1), BVar (Fixed k2)) => 
 	       (k1 = k2) andalso convSpine ((S1, s1), (S2, s2))
-	   | (BVar (BVarVar (r1, sA)), BVar (BVarVar (r2, sB))) =>
+	   | (BVar (BVarVar ((r1, _, _), sA)), BVar (BVarVar ((r2, _, _), sB))) =>
 	       (* r1 and r2 are ref NONE since it is in whnf *)
 	       (r1 = r2) andalso convSub (sA, sB)
 	       andalso convSpine ((S1, s1), (S2, s2))

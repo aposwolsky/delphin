@@ -123,17 +123,17 @@ struct
 	  assignExp(G, Us1, (U, comp(s', s)), cnstr)
 
       | assignExpW (G, Us1 as (EVar(r, _, V, Cnstr), s), Us2, cnstr) =
-	   (Eqn(G, EClo(Us1), EClo(Us2))::cnstr)
+	   (Eqn(Null, G, EClo(Us1), EClo(Us2))::cnstr)
 
       | assignExpW (G, Us1 as (EClo(U,s'), s), Us2, cnstr) = 
 	  assignExp(G, (U, comp(s', s)), Us2, cnstr)
 
       | assignExpW (G, Us1 as (FgnExp (_, fe), _), Us2, cnstr) =
 	  (* by invariant Us2 cannot contain any FgnExp *)
-	    (Eqn(G, EClo(Us1), EClo(Us2))::cnstr)
+	    (Eqn(Null, G, EClo(Us1), EClo(Us2))::cnstr)
 
       | assignExpW (G, Us1, Us2 as (FgnExp (_, fe), _), cnstr) =
-	    (Eqn(G, EClo(Us1), EClo(Us2))::cnstr)
+	    (Eqn(Null, G, EClo(Us1), EClo(Us2))::cnstr)
 	  
     and assignSpine (G, (Nil, _), (Nil, _), cnstr) = cnstr
       | assignSpine (G, (SClo (S1, s1'), s1), Ss, cnstr) = 
@@ -151,7 +151,7 @@ struct
 	 assignExpW (G, Whnf.whnf Us1, Whnf.whnf Us2, cnstr)  
 
     fun solveCnstr nil = true
-      | solveCnstr (Eqn(G, U1, U2)::Cnstr) = 
+      | solveCnstr (Eqn(Null, G, U1, U2)::Cnstr) = 
         (Unify.unifiable(G, (U1, id), (U2, id)) andalso solveCnstr Cnstr)
 	
     fun unifyW (G, (Xs1 as AVar(r as ref NONE), s), Us2) = 

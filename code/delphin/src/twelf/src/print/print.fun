@@ -809,7 +809,7 @@ local
 *)      end
 
   fun fmtCnstr (I.Solved) = [Str "Solved Constraint"]
-    | fmtCnstr (I.Eqn (G, U1, U2)) =
+    | fmtCnstr (I.Eqn (Gglobal, G, U1, U2)) =
         let
           val G' = Names.ctxLUName G
         in

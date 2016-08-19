@@ -1,4 +1,5 @@
 (* Delphin Type Checker *)
+(* Also checks worlds *)
 (* Author: Adam Poswolsky *)
 
 structure DelphinTypeCheck : DELPHIN_TYPECHECK = 
@@ -9,10 +10,14 @@ structure DelphinTypeCheck : DELPHIN_TYPECHECK =
     exception Error of string
    
 
-    fun lookup (I.Decl(G, D.InstantiableDec (D.NormalDec (_, T))), 1) = T
-      | lookup (I.Decl(G, D.NonInstantiableDec (D.NewDecLF (_, A))), 1) = D.LF(D.Param, A)
-      | lookup (I.Decl(G, D.NonInstantiableDec (D.NewDecMeta (_, F))), 1) = D.Meta(D.Param, F)
-      | lookup (I.Decl(G, _), i) = if i < 1 then raise Domain else lookup(G, i-1)
+    (* lookup (G, i) = T
+     * where T is the type of the variable at index i (not weakened to context G)
+     *)
+    fun lookup (I.Decl(G, (D.InstantiableDec (D.NormalDec (_, T)))), 1) = T
+      | lookup (I.Decl(G, (D.NonInstantiableDec (D.NewDecLF (_, A)))), 1) = D.LF(D.Param, A)
+      | lookup (I.Decl(G, (D.NonInstantiableDec (D.NewDecMeta (_, F)))), 1) = D.Meta(D.Param, F)
+      | lookup (I.Decl(G, (D.NonInstantiableDec _)), i) = if i < 1 then raise Domain else lookup(G, i-1)
+      | lookup (I.Decl(G, (D.InstantiableDec _)), i) = if i < 1 then raise Domain else lookup(G, i-1)
       | lookup (I.Null, i) = raise Error "Attempted to access invalid index"
 
     fun getElement(1, x::xs) = x
@@ -21,7 +26,7 @@ structure DelphinTypeCheck : DELPHIN_TYPECHECK =
 
     (* unifies the two types *)
     fun unifyTypes(G, T1, T2) = 
-         (U.unifyT(D.coerceCtx G, T1, T2) handle U.Error s => raise Error ("Delphin Typecheck Error (Unify): "^ s))
+         (U.unifyT(I.Null, D.coerceCtx G, T1, T2) handle U.Error s => raise Error ("Delphin Typecheck Error (Unify): "^ s))
 
     fun inferType (G, E) = (inferTypeW (G, D.whnfE E) handle D.SubstFailed => raise Error ("Typecheck Error:  whnf Failed (IMPOSSIBLE!)"))
     and inferTypeW (G, D.Quote M) =
@@ -32,7 +37,12 @@ structure DelphinTypeCheck : DELPHIN_TYPECHECK =
 		D.LF(D.Existential, A)
 	      end
 
-      | inferTypeW (G, D.Var (D.Fixed i)) = D.substTypes(lookup(G, i), I.Shift i)
+      | inferTypeW (G, D.Var (D.Fixed i, fileInfo)) = 
+	      let
+		val T = lookup(G, i)
+	      in
+		D.substTypes(T, I.Shift i)
+	      end
 
       | inferTypeW (G, E) = 
 	      (* E is a Formula (param or existential) *)
@@ -45,12 +55,12 @@ structure DelphinTypeCheck : DELPHIN_TYPECHECK =
 
     and checkCaseType (G, D.Eps(D, C), Tresult) = 
               let
-		val G' = I.Decl(G, D.InstantiableDec D)
+		val G' = I.Decl(G, (D.InstantiableDec D))
 	      in
 		checkCaseType(G', C, D.substTypes(Tresult, I.shift))
 	      end
 
-      | checkCaseType (G, D.NewC(D, C), Tresult) = 
+      | checkCaseType (G, D.NewC(D, C, fileInfo), Tresult) = 
               let
 		val G' = I.Decl(G, D.NonInstantiableDec D)
 		val newResult = D.newFVar(D.coerceCtx G')
@@ -78,14 +88,14 @@ structure DelphinTypeCheck : DELPHIN_TYPECHECK =
 	       end
 
 
-      | checkCaseType (G, D.Match(E1, E2), Tresult) =
+      | checkCaseType (G, D.Match(visible, E1, E2), Tresult) =
 	      let
 		val argType = inferType(G, E1)
 		val D = D.NormalDec(NONE, argType)
 		val G' = I.Decl(G, D.InstantiableDec D)
 		val funResult = D.newFVar(D.coerceCtx G')
 		val t = D.Dot(D.Prg E1, D.id) (* G |- E1.id : G' *)
-		val _ = unifyTypes(G, Tresult, D.Meta(D.Existential, D.All(D.Visible, D, funResult)))
+		val _ = unifyTypes(G, Tresult, D.Meta(D.Existential, D.All(visible, NONE, D, funResult)))
 	      in
 		checkType(G, E2, D.Meta(D.Existential, (D.FClo(funResult, D.coerceSub t))))
 	      end
@@ -97,13 +107,21 @@ structure DelphinTypeCheck : DELPHIN_TYPECHECK =
 		val G' = I.Decl(G, D.InstantiableDec D)
 		val funResult = D.newFVar(D.coerceCtx G')
 		val t = D.Dot(D.Prg E1, D.id) (* G |- E1.id : G' *)
-		val _ = unifyTypes(G, Tresult, D.Meta(D.Existential, D.All(visible, D, funResult)))
+		val _ = unifyTypes(G, Tresult, D.Meta(D.Existential, D.All(visible, NONE, D, funResult)))
 	      in
 		checkCaseType(G, C, D.Meta(D.Existential, (D.FClo(funResult, D.coerceSub t))))
 	      end
 
     and checkType (G, E, Tresult) = checkTypeW (G, D.whnfE E, Tresult) handle D.SubstFailed => raise Error ("Typecheck Error:  whnf Failed (IMPOSSIBLE!)")
-    and checkTypeW (G, D.Var (D.Fixed i), Tresult) = unifyTypes(G, D.substTypes(lookup(G, i),I.Shift i), Tresult)
+    and checkTypeW (G, D.Var (D.Fixed i, fileInfo), Tresult) = 
+	      let
+		val T = lookup(G, i)
+	      in
+		unifyTypes(G, D.substTypes(T,I.Shift i), Tresult)
+	      end
+
+
+
       | checkTypeW (G, D.Var _, Tresult) = () (* BoundVars.. *)
       | checkTypeW (G, D.Quote M, Tresult)  =
                let
@@ -115,7 +133,7 @@ structure DelphinTypeCheck : DELPHIN_TYPECHECK =
 
       | checkTypeW (G, D.Unit, Tresult) = unifyTypes(G, Tresult, D.Meta(D.Existential, D.Top))
 
-      | checkTypeW (G, D.Lam (Clist, F), Tresult) = 
+      | checkTypeW (G, D.Lam (Clist, F, fileInfo), Tresult) = 
 	       let
 		 val _ = unifyTypes (G, Tresult, D.Meta(D.Existential, F))
 		 val _ = map (fn C => checkCaseType(G, C, Tresult)) Clist
@@ -124,7 +142,7 @@ structure DelphinTypeCheck : DELPHIN_TYPECHECK =
 	       end
 
 
-      | checkTypeW (G, D.New (D, E), Tresult) =
+      | checkTypeW (G, D.New (D, E, fileInfo), Tresult) =
 	       let 
 		 val G' = I.Decl(G,D.NonInstantiableDec D)
 		 val newResult = D.newFVar(D.coerceCtx G')
@@ -146,7 +164,7 @@ structure DelphinTypeCheck : DELPHIN_TYPECHECK =
 		 val t = D.Dot(D.Prg E2, D.id)  (* G |- E2.id  : G' *)
 		 val _ = unifyTypes(G, Tresult, D.Meta(D.Existential, D.FClo(funResult, D.coerceSub t)))
 
-		 val funF = D.All (visible, D, funResult)
+		 val funF = D.All (visible, NONE, D, funResult)
 		 val funType = D.Meta(D.Existential, funF)
 	       in
 		 checkType(G, E1, funType)

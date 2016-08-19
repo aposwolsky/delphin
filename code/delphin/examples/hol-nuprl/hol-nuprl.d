@@ -10,8 +10,12 @@ sig use "nuprl/examples.elf";
 sig use "trans.elf";
 
 
+type world1 = (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>);;
+type world2 = (<B:tp> -> <H':tm B> -> <M:n-tm> -> <u:(transtm H' M)#> -> <T:n-tm> * <transtp B T> * <!- M !*! T>);
+type world3 = (<H: tm o> -> <U: |- H #> -> <T:n-tm> * <transsen H T> * <M:n-tm> * < !- M !*! T>);
 
-fun extend1 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>) -> <A:tp> -> {<x : tm A#>} {<y : n-tm#>} {<u : transtm x y#>} (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>) = 
+
+fun extend1 : world1 -> <A:tp> -> {<x : tm A#>} {<y : n-tm#>} {<u : transtm x y#>} world1 = 
 	fn W => fn <A> => fn {<x : tm A#>} {<y : n-tm#>} {<u : transtm x y#>} (<A> x => (<y>, <u>))
 		           | [<e>] {<x>} {<y>} {<u>} (<_> e => 
 							 (let
@@ -21,10 +25,10 @@ fun extend1 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>) -> <A:tp> ->
 							 end) \x \y \u);
 
 
-fun extend2 : (<B:tp> -> <H':tm B> -> <M:n-tm> -> <u:(transtm H' M)#> -> <T:n-tm> * <transtp B T> * <!- M !*! T>)
+
+fun extend2 : world2
               -> <A:tp> -> <t:n-tm> -> <transtp A t> 
-	      -> {<x: tm A#>} {<y : n-tm#>} {<ttm: transtm x y#>} {<u: (!- y !*! t) #>}
-                (<B:tp> -> <H':tm B> -> <M:n-tm> -> <u:(transtm H' M)#> -> <T:n-tm> * <transtp B T> * <!- M !*! T>) =
+	      -> {<x: tm A#>} {<y : n-tm#>} {<ttm: transtm x y#>} {<u: (!- y !*! t) #>} world2 =
     fn W => fn <A> => fn <T'> => fn <TTP> => fn {<x>}{<y>}{<ttm>}{<u>} (<A> <x> <y> ttm => (<T'>, <TTP>, <u>))
 	                                      | [<x'>][<y'>][<ttm'>]{<x>}{<y>}{<ttm>}{<u>} (<_> <x'> <y'> ttm' => 
 							 (let
@@ -33,10 +37,28 @@ fun extend2 : (<B:tp> -> <H':tm B> -> <M:n-tm> -> <u:(transtm H' M)#> -> <T:n-tm
 							   {<x>}{<y>}{<ttm>}{<u>} result
 							 end) \x \y \ttm \u);
 
-fun extend3 : (<H: tm o> -> <U: |- H #> -> <T:n-tm> * <transsen H T> * <M:n-tm> * < !- M !*! T>)
+fun extend2-world1 : world1 
+	      -> <A:tp> -> {<x: tm A#>} {<y : n-tm#>} {<ttm: transtm x y#>} {<u: (!- y !*! t) #>} world1 =
+                            fn W => fn <A> => fn {<x:tm A#>} {<y:n-tm#>} {<ttm: transtm x y#>} {<u>} (<A> x => (<y>, <ttm>))
+		                               | [<e>]{<x>}{<y>}{<ttm>}{<u>} (<_> e => 
+							 (let
+							   val result = W <_> e
+							 in
+							   {<x>}{<y>}{<ttm>}{<u>} result
+							 end) \x \y \ttm \u);
+
+fun extend2-world3 : world3
+	      -> {<x: tm A#>} {<y : n-tm#>} {<ttm: transtm x y#>} {<u: (!- y !*! t) #>} world3 =
+                                     fn W => fn [<u'>]{<x>}{<y>}{<ttm>}{<u>} (<_> u' => 
+							 (let
+							   val result = W <_> u'
+							 in
+							   {<x>}{<y>}{<ttm>}{<u>} result
+							 end) \x \y \ttm \u);
+
+fun extend3 : world3
               -> <H: tm o> -> <T1 : n-tm> -> <TTM1 : transtm H T1> -> 
-              {<u: |- H>} {<y:n-tm>} {<v : !- y !*! ^ T1>}
-               (<H: tm o> -> <U: |- H #> -> <T:n-tm> * <transsen H T> * <M:n-tm> * < !- M !*! T>) = 
+              {<u: |- H>} {<y:n-tm>} {<v : !- y !*! ^ T1>} world3 = 
     fn W => fn <H> => fn <T1> => fn <TTM1> => fn {<u : |- H>}{<y:n-tm>}{<v: !- y !*! ^ T1>} (<H> u => (<^ T1>, <t-base TTM1>, <y>, <v>))
 	                                      | [<u'>] {<u>}{<y>}{<v>} (<_> u' => 
 							 (let
@@ -44,6 +66,27 @@ fun extend3 : (<H: tm o> -> <U: |- H #> -> <T:n-tm> * <transsen H T> * <M:n-tm> 
 							 in
 							   {<u>}{<y>}{<v>} result
 							 end) \u \y \v);
+
+fun extend3-world1 : world1 ->
+        	      {<u: |- H>} {<y:n-tm>} {<v : !- y !*! ^ T1>} world1 = 
+                                     fn W => fn [<u'>] {<u>}{<y>}{<v>} (<_> u' => 
+							 (let
+							   val result = W <_> u'
+							 in
+							   {<u>}{<y>}{<v>} result
+							 end) \u \y \v);
+
+fun extend3-world2 : world2 ->
+        	      {<u: |- H>} {<y:n-tm>} {<v : !- y !*! ^ T1>} world2 = 
+                                     fn W => fn [<x'>][<y'>][<ttm'>] {<u>}{<y>}{<v>} (<_> <x'> <y'> ttm' => 
+							 (let
+							   val result = W <_> x' y' ttm'
+							 in
+							   {<u>}{<y>}{<v>} result
+							 end) \u \y \v);
+
+
+params = <n-tm>, <tm B>, <transtm H M>, <|- H>, < !- M !*! T > ;
 
 
 (* Lemma 1 *)
@@ -55,7 +98,8 @@ fun lemma1 : <A : tp> -> <N : n-tm> * <transtp A N>
 
 
 (* Lemma 2 *)
-fun lemma2 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>) -> <H:tm C> -> <M:n-tm> * <transtm H M>
+
+fun lemma2 : world1 -> <H:tm C> -> <M:n-tm> * <transtm H M>
             = fn W < => > => (< =p=> >, < trans=> >)
 	       | W < == : tm (A arr A arr o) > 
 	           => (case (lemma1 <A>)
@@ -117,8 +161,7 @@ fun lemma3 : <transtp A T> -> <X1:n-tm> * <!- X1 !*! ((T !*! (uni 1)) n/\ (inh T
 (* Lemma 4 *)
 
 
-fun lemma4 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>)
-             -> (<B:tp> -> <H':tm B> -> <M:n-tm> -> <u:(transtm H' M)#> -> <T:n-tm> * <transtp B T> * <!- M !*! T>)
+fun lemma4 : world1 -> world2 
              -> <transtm (H:tm A) N> -> <T:n-tm> * <transtp A T> * <!- N !*! T> 
 	   = fn W1 W2 [<u:transtm (H:tm A) N#>] <u> => W2 <A> <H> <N> u
               | W1 W2 < trans=> > 
@@ -148,7 +191,7 @@ fun lemma4 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>)
 	        => (case (lemma3 <TTP1>) 
  		      of (<_>, <ND1>)
 		      => (case ({<x>}{<y>}{<ttm:transtm x y>}{<u>} lemma4 
-		                                                   ((let val R = ((extend1 W1 <_>) \x \y \ttm) in {<u>} R end) \u)
+	                                                           ((extend2-world1 W1 <_>) \x \y \ttm \u)
                                                                    ((extend2 W2 <_> <_> <TTP1> ) \x \y \ttm \u)
 		                                                   <TTM x y ttm>)
 		            of ({<x>}{<y>}{<ttm>}{<u>} (<_>, <TTP2>,  <ND2 y u>))
@@ -200,9 +243,7 @@ fun lemma4 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>)
 
 (* Lemma 5 *)
 
-fun lemma5 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>)
-             -> (<B:tp> -> <H':tm B> -> <M:n-tm> -> <u:(transtm H' M)#> -> <T:n-tm> * <transtp B T> * <!- M !*! T>)
-	     -> (<H: tm o> -> <U: |- H #> -> <T:n-tm> * <transsen H T> * <M:n-tm> * < !- M !*! T>)
+fun lemma5 : world1 -> world2 -> world3
              -> < |- H > -> <T:n-tm> * <transsen H T> * <M:n-tm> * < !- M !*! T>
 	   = fn W1 W2 W3 [<u : |- H #>] <u> => W3 <H> u
               | W1 W2 W3 <beta : |- (\ H) @ G === (H G)> 
@@ -213,7 +254,7 @@ fun lemma5 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>)
 			    => (case (lemma4 W1 W2 <TTM2>) 
 			          of (<_>, <TTP2>, <ND4>) 
 			          => (case ({<x>}{<y>}{<ttm:transtm x y>}{<u: !- y !*! T>} lemma4 
-		                                                   ((let val R = ((extend1 W1 <_>) \x \y \ttm) in {<u>} R end) \u)
+		                                                   ((extend2-world1 W1 <_>) \x \y \ttm \u)
                                                                    ((extend2 W2 <_> <_> <TTP2> ) \x \y \ttm \u)
                                                                    <TTM1 x y ttm>)
 			                of ({<x>}{<y>}{<ttm:transtm x y>}{<u: !- y !*! T>} (<MM>, <TTP1>, <ND3 y u>))
@@ -261,7 +302,7 @@ fun lemma5 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>)
 			    => (case ((lemma3 <TTP1>), (lemma4 W1 W2 <TTM1>), (lemma4 W1 W2 <TTM2>)) 
 			          of ((<_>, <ND2>), (<_>, <_>, <ND3>), (<_>, <_>, <ND4>))
 				  => (case ({<x>}{<y>}{<ttm>}{<u>} lemma4 
-		                                                   ((let val R = ((extend1 W1 <_>) \x \y \ttm) in {<u>} R end) \u)
+                                                                   ((extend2-world1 W1 <_>) \x \y \ttm \u)
                                                                    ((extend2 W2 <_> <_> <TTP1> ) \x \y \ttm \u)
                                                                    <TTM3 x y ttm>)
 				        of ({<x>}{<y>}{<ttm>}{<u>} (<_>, <_>, <ND6 y u>)) 
@@ -293,7 +334,7 @@ fun lemma5 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>)
 		      => (case ({<x>}{<y>}{<ttm>} ((lemma2 ((extend1 W1 <_>) \x \y \ttm) <H x>), (lemma2 ((extend1 W1 <_>) \x \y \ttm) <G x>)))
 		            of ({<x>}{<y>}{<ttm>} ((<_>, <TTM1 x y ttm>), (<_>, <TTM2 x y ttm>)))
 			    => (case ({<x>}{<y>}{<ttm:transtm x y>}{<u : !- y !*! _>} 
-				         let val W1' = ((let val R = ((extend1 W1 <_>) \x \y \ttm) in {<u>} R end) \u)
+				         let val W1' = ((extend2-world1 W1 <_>) \x \y \ttm \u)
                                              val W2' = ((extend2 W2 <_> <_> <TTP1> ) \x \y \ttm \u)
                                           in
                                            ((lemma4 W1' W2' <TTM1 x y ttm>), (lemma4 W1' W2' <TTM2 x y ttm>))
@@ -301,9 +342,9 @@ fun lemma5 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>)
 			          of ({<x>}{<y>}{<ttm:transtm x y>}{<u: !- y !*! _>} ((<_>, <TTP2>, <ND3 y u>), (<_>, <TTP1>, <ND4 y u>)))
 				  => (case ({<x>}{<y>}{<ttm:transtm x y>}{<u: !- y !*! _>} 
                                                                          lemma5 
-		                                                            ((let val R = ((extend1 W1 <_>) \x \y \ttm) in {<u>} R end) \u)
+		                                                            ((extend2-world1 W1 <_>) \x \y \ttm \u)
                                                                             ((extend2 W2 <_> <_> <TTP1> ) \x \y \ttm \u)
-                                                                            W3
+                                                                            ((extend2-world3 W3) \x \y \ttm \u)
                                                                          <D1 x>)
 				        of ({<x>}{<y>}{<ttm:transtm x y>}{<u: !- y !*! _>} (<_>, <_>, <_>, <ND5 y u>)) 
 					=> (case ((lemma3 <TTP1>), (lemma3 <TTP2>))
@@ -335,7 +376,7 @@ fun lemma5 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>)
 		      of ((<_>, <TTM1>), (<_>, <TTM2>)) 
 		      => (case ((lemma4 W1 W2 <TTM1>), (lemma4 W1 W2 <TTM2>)) 
 		            of ((<_>, <_>, <ND1>), (<_>, <_>, <ND2>))
-			    => (case ({<u: |- H>}{<y>}{<v:!- y !*! ^ T1>} lemma5 W1 W2 ((extend3 W3 <H> <T1> <TTM1>) \u \y \v) <D u>) 
+			    => (case ({<u: |- H>}{<y>}{<v:!- y !*! ^ T1>} lemma5 ((extend3-world1 W1) \u \y \v)  ((extend3-world2 W2) \u \y \v) ((extend3 W3 <H> <T1> <TTM1>) \u \y \v) <D u>) 
 			          of ({<u: |- H>}{<y>}{<v:!- y !*! ^ T1>} (<_>, <_>, <_>, <ND y v>)) 
 				  => (<_>, <t-base (trans@ (trans@ trans=> TTM1) TTM2)>, <_>, < =n=>-elim (nall-elim (nall-elim disch_lemma ND1) ND2)
 					    (=n=>-intro (boolean-if (uni-form (+ge1 0ge0)) ND1 (ntrue-form)  nfalse-form) ND)>))))
@@ -360,4 +401,6 @@ fun lemma5 : (<B:tp> -> <H':(tm B)#> -> <M:n-tm> * <transtm H' M>)
 
 
 val sample : <|- true ==> true> = <disch ([u] u)>;
+params = . ;
+
 val test = lemma5 (fn .) (fn .) (fn .) sample;

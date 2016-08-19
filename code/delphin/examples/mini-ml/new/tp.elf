@@ -1,0 +1,11 @@
+%%% Mini-ML types.
+%%% Author: Frank Pfenning, based on [Michaylov & Pfenning 92]
+
+tp : type.  %name tp T.
+nat   : tp.				% Natural Numbers
+cross : tp -> tp -> tp.			% Pairs
+arrow : tp -> tp -> tp.			% Functions
+
+scheme : type.
+forall : (tp -> scheme) -> scheme.              % Polymorphic 
+! : tp -> scheme.

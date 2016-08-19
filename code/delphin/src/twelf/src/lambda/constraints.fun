@@ -39,7 +39,7 @@ struct
     fun simplify nil = nil
       | simplify ((ref I.Solved) :: cnstrs) =
           simplify cnstrs
-      | simplify ((Eqn as ref (I.Eqn (G, U1, U2))) :: cnstrs) =
+      | simplify ((Eqn as ref (I.Eqn (Gglobal, G, U1, U2))) :: cnstrs) =
         if Conv.conv ((U1, I.id), (U2, I.id))
 	  then simplify cnstrs
         else Eqn :: (simplify cnstrs)

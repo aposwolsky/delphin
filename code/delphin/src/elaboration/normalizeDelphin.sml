@@ -13,7 +13,7 @@ structure NormalizeDelphin =
 
     fun normalizeFor F = normalizeForN (D.whnfF F)
     and normalizeForN (F as D.Top) = F
-      | normalizeForN (D.All(visible, D, F)) = D.All(visible, normalizeNormalDec D, normalizeFor F)
+      | normalizeForN (D.All(visible, W, D, F)) = D.All(visible, W, normalizeNormalDec D, normalizeFor F)
       | normalizeForN (D.Exists(D, F)) = D.Exists(normalizeNormalDec D, normalizeFor F)
       | normalizeForN (D.Nabla(D, F)) = D.Nabla(normalizeNewDec D, normalizeFor F)
       | normalizeForN (D.FormList Flist) = D.FormList(map normalizeFor Flist)
@@ -41,13 +41,13 @@ structure NormalizeDelphin =
       | normalizeTypes (D.Meta(isP, F)) = D.Meta(normalizeIsParam isP, normalizeFor F)
 
     fun normalizeExp (E) = (normalizeExpW (D.whnfE E) handle D.SubstFailed => raise Domain)
-    and normalizeExpW (E as D.Var (D.Fixed _)) = E 
-      | normalizeExpW (E as D.Var (D.BVarMeta (r, s))) = D.Var (D.BVarMeta (r, normalizeSub s))
-      | normalizeExpW (E as D.Var (D.BVarLF (r, s))) = D.Var (D.BVarLF (r, Whnf.normalizeSub s))
+    and normalizeExpW (E as D.Var (D.Fixed _, _)) = E 
+      | normalizeExpW (E as D.Var (D.BVarMeta ((r, F), s), fileInfo)) = D.Var (D.BVarMeta ((r, normalizeFor F), normalizeSub s), fileInfo)
+      | normalizeExpW (E as D.Var (D.BVarLF ((r, A, list), s), fileInfo)) = D.Var (D.BVarLF ((r, Whnf.normalize(A, I.id), list), Whnf.normalizeSub s), fileInfo)
       | normalizeExpW (D.Quote U) = D.Quote (Whnf.normalize(U, I.id))
       | normalizeExpW (E as D.Unit) = D.Unit
-      | normalizeExpW (D.Lam (Clist, F)) = D.Lam(map normalizeCase Clist, normalizeFor F)
-      | normalizeExpW (D.New (D, E)) = D.New(normalizeNewDec D, normalizeExp E)
+      | normalizeExpW (D.Lam (Clist, F, fileInfo)) = D.Lam(map normalizeCase Clist, normalizeFor F, fileInfo)
+      | normalizeExpW (D.New (D, E, fileInfo)) = D.New(normalizeNewDec D, normalizeExp E, fileInfo)
       | normalizeExpW (D.App (visible, E1, E2)) = D.App (visible, normalizeExp E1, normalizeExp E2)
       | normalizeExpW (D.Pair (E1, E2, F)) = D.Pair (normalizeExp E1, normalizeExp E2, normalizeFor F)
       | normalizeExpW (D.ExpList Elist) = D.ExpList (map normalizeExp Elist)
@@ -58,9 +58,9 @@ structure NormalizeDelphin =
       | normalizeExpW (D.EClo _) = raise Domain (* not in whnf *)
 
     and normalizeCase (D.Eps (D, C)) = D.Eps(normalizeNormalDec D, normalizeCase C)
-      | normalizeCase (D.NewC (D, C)) = D.NewC(normalizeNewDec D, normalizeCase C)
+      | normalizeCase (D.NewC (D, C, fileInfo)) = D.NewC(normalizeNewDec D, normalizeCase C, fileInfo)
       | normalizeCase (D.PopC (i, C)) = D.PopC(i, normalizeCase C)
-      | normalizeCase (D.Match(E1, E2)) = D.Match(normalizeExp E1, normalizeExp E2)
+      | normalizeCase (D.Match(visible, E1, E2)) = D.Match(visible, normalizeExp E1, normalizeExp E2)
       | normalizeCase (D.MatchAnd (visible, E1, C)) = D.MatchAnd(visible, normalizeExp E1, normalizeCase C)
 
 
@@ -125,7 +125,7 @@ structure NormalizeDelphin =
 
     fun hasVarsFor F = hasVarsForN (D.whnfF F)
     and hasVarsForN (D.Top) = false
-      | hasVarsForN (D.All(visible, D, F)) = (hasVarsNormalDec D) orelse (hasVarsFor F)
+      | hasVarsForN (D.All(visible, W, D, F)) = (hasVarsNormalDec D) orelse (hasVarsFor F)
       | hasVarsForN (D.Exists(D, F)) = (hasVarsNormalDec D) orelse (hasVarsFor F)
       | hasVarsForN (D.Nabla(D, F)) = (hasVarsNewDec D) orelse (hasVarsFor F)
       | hasVarsForN (D.FormList Flist) = foldr (fn (F,b) => b orelse (hasVarsFor F)) false Flist
@@ -145,12 +145,12 @@ structure NormalizeDelphin =
       | hasVarsTypes (D.Meta(isP, F)) = (hasVarsIsP isP) orelse (hasVarsFor F)
 
     fun hasVarsExp E = (hasVarsExpW (D.whnfE E) handle D.SubstFailed => raise Domain )
-    and hasVarsExpW (D.Var (D.Fixed _)) = false
+    and hasVarsExpW (D.Var (D.Fixed _, _)) = false
       | hasVarsExpW (D.Var _) = true
       | hasVarsExpW (D.Quote U) = (LFhasVarsExp U)
       | hasVarsExpW (E as D.Unit) = false
-      | hasVarsExpW (D.Lam (Clist, F)) = foldr (fn (C,b) => b orelse (hasVarsCase C)) (hasVarsFor F) Clist
-      | hasVarsExpW (D.New (D, E)) = (hasVarsNewDec D) orelse (hasVarsExp E)
+      | hasVarsExpW (D.Lam (Clist, F, fileInfo)) = foldr (fn (C,b) => b orelse (hasVarsCase C)) (hasVarsFor F) Clist
+      | hasVarsExpW (D.New (D, E, fileInfo)) = (hasVarsNewDec D) orelse (hasVarsExp E)
       | hasVarsExpW (D.App (visible, E1, E2)) = (hasVarsExp E1) orelse (hasVarsExp E2)
       | hasVarsExpW (D.Pair (E1, E2, F)) = (hasVarsExp E1) orelse (hasVarsExp E2) orelse (hasVarsFor F)
       | hasVarsExpW (D.ExpList Elist) = foldr (fn (E,b) => b orelse (hasVarsExp E)) false Elist
@@ -161,9 +161,9 @@ structure NormalizeDelphin =
       | hasVarsExpW (D.EClo _) = raise Domain (* not in whnf *)
 
     and hasVarsCase (D.Eps (D, C)) = (hasVarsNormalDec D) orelse (hasVarsCase C)
-      | hasVarsCase (D.NewC (D, C)) = (hasVarsNewDec D) orelse (hasVarsCase C)
+      | hasVarsCase (D.NewC (D, C, fileInfo)) = (hasVarsNewDec D) orelse (hasVarsCase C)
       | hasVarsCase (D.PopC (i, C)) = (hasVarsCase C)
-      | hasVarsCase (D.Match(E1, E2)) = (hasVarsExp E1) orelse (hasVarsExp E2)
+      | hasVarsCase (D.Match(visible, E1, E2)) = (hasVarsExp E1) orelse (hasVarsExp E2)
       | hasVarsCase (D.MatchAnd (visible, E1, C)) = (hasVarsExp E1) orelse (hasVarsCase C)
 
 
@@ -179,7 +179,7 @@ structure NormalizeDelphin =
    (* Check only for FVars *)
     fun hasFVarsFor F = hasFVarsForN (D.whnfF F)
     and hasFVarsForN (D.Top) = false
-      | hasFVarsForN (D.All(_, D, F)) = (hasFVarsNormalDec D) orelse (hasFVarsFor F)
+      | hasFVarsForN (D.All(_, _, D, F)) = (hasFVarsNormalDec D) orelse (hasFVarsFor F)
       | hasFVarsForN (D.Exists(D, F)) = (hasFVarsNormalDec D) orelse (hasFVarsFor F)
       | hasFVarsForN (D.Nabla(D, F)) = (hasFVarsNewDec D) orelse (hasFVarsFor F)
       | hasFVarsForN (D.FormList Flist) = foldr (fn (F,b) => b orelse (hasFVarsFor F)) false Flist
@@ -199,12 +199,12 @@ structure NormalizeDelphin =
       | hasFVarsTypes (D.Meta(isP, F)) = (hasFVarsFor F)
 
     fun hasFVarsExp E = (hasFVarsExpW (D.whnfE E) handle D.SubstFailed => raise Domain )
-    and hasFVarsExpW (D.Var (D.Fixed _)) = false
+    and hasFVarsExpW (D.Var (D.Fixed _, _)) = false
       | hasFVarsExpW (D.Var _) = false (* BoundVars vars.. *)
       | hasFVarsExpW (D.Quote U) = false
       | hasFVarsExpW (E as D.Unit) = false
-      | hasFVarsExpW (D.Lam (Clist, F)) = foldr (fn (C,b) => b orelse (hasFVarsCase C)) (hasFVarsFor F) Clist
-      | hasFVarsExpW (D.New (D, E)) = (hasFVarsNewDec D) orelse (hasFVarsExp E)
+      | hasFVarsExpW (D.Lam (Clist, F, fileInfo)) = foldr (fn (C,b) => b orelse (hasFVarsCase C)) (hasFVarsFor F) Clist
+      | hasFVarsExpW (D.New (D, E, fileInfo)) = (hasFVarsNewDec D) orelse (hasFVarsExp E)
       | hasFVarsExpW (D.App (_, E1, E2)) = (hasFVarsExp E1) orelse (hasFVarsExp E2)
       | hasFVarsExpW (D.Pair (E1, E2, F)) = (hasFVarsExp E1) orelse (hasFVarsExp E2) orelse (hasFVarsFor F)
       | hasFVarsExpW (D.ExpList Elist) = foldr (fn (E,b) => b orelse (hasFVarsExp E)) false Elist
@@ -215,9 +215,9 @@ structure NormalizeDelphin =
       | hasFVarsExpW (D.EClo _) = raise Domain (* not in whnf *)
 
     and hasFVarsCase (D.Eps (D, C)) = (hasFVarsNormalDec D) orelse (hasFVarsCase C)
-      | hasFVarsCase (D.NewC (D, C)) = (hasFVarsNewDec D) orelse (hasFVarsCase C)
+      | hasFVarsCase (D.NewC (D, C, fileInfo)) = (hasFVarsNewDec D) orelse (hasFVarsCase C)
       | hasFVarsCase (D.PopC (i, C)) = (hasFVarsCase C)
-      | hasFVarsCase (D.Match(E1, E2)) = (hasFVarsExp E1) orelse (hasFVarsExp E2)
+      | hasFVarsCase (D.Match(_, E1, E2)) = (hasFVarsExp E1) orelse (hasFVarsExp E2)
       | hasFVarsCase (D.MatchAnd (_, E1, C)) = (hasFVarsExp E1) orelse (hasFVarsCase C)
 
 

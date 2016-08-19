@@ -8,14 +8,15 @@ CM.make "src/sources.cm";
 structure Server =
 struct
 
-  val ContextRef : DelphinIntSyntax.Dec IntSyn.Ctx ref = ref IntSyn.Null
+  val ContextRef : DelphinIntSyntax.decCtx ref = ref IntSyn.Null
   val subRef = ref (DelphinIntSyntax.id)
+  val wRef = ref (DelphinIntSyntax.Anything)
 
   fun server (name, _) =
     let
       val _ = print ("\n" ^ Delphin.version ^ "\n\n")
 
-      fun interrupt(k) = 
+      fun interrupt'(k) = 
 	let
 	  val _ = print "\ninterrupt!  Quit?[Y/N]:  " 
 	  val ioOpt = TextIO.inputLine TextIO.stdIn;
@@ -34,6 +35,8 @@ struct
 	  k
 	end
 
+      fun interrupt(k) = interrupt'(k) handle _ => interrupt(k)
+
       (* Instead we will have it repeat *)
       fun interruptLoop (loop:unit -> unit) =
 	(SMLofNJ.Cont.callcc
@@ -50,7 +53,7 @@ struct
       val _ = Delphin.changePath (OS.FileSys.getDir())
       val _ = Delphin.resetMetaSig ()
 
-      val _ = interruptLoop (fn () => Delphin.top'(ContextRef, subRef)) 
+      val _ = interruptLoop (fn () => Delphin.top'(ContextRef, subRef, wRef)) 
 
 
     in

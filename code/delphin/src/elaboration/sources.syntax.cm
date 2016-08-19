@@ -7,9 +7,13 @@ Library
   structure PrintDelphinInt	
   structure UnifyDelphinOpsemTrail
   structure UnifyDelphinNoTrail
+  structure UnifyDelphinTrail
   structure NormalizeDelphin
   structure DelphinApprox
   structure DelphinAbstract
+  structure DelphinAbstract2
+  structure WorldSubsumption
+  structure DelphinCoverage
 is
 #if defined(NEW_CM)
   $/basis.cm
@@ -33,3 +37,6 @@ is
   abstract.sig
   abstract.fun
   abstract.sml  
+  abstract2.fun
+  world.fun
+  coverage.fun

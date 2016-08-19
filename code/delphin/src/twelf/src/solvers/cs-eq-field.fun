@@ -421,7 +421,7 @@ struct
                        | NONE => 
                            let
                              val U = toFgn sum
-                             val cnstr = ref (Eqn (G, U, numberExp (zero)))
+                             val cnstr = ref (Eqn (Null, G, U, numberExp (zero)))
                            in 
                              Succeed [Delay (U, cnstr)]
                            end

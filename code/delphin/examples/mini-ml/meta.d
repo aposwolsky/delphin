@@ -372,6 +372,5 @@ fun test : <E:exp> -> <V:exp> * <eval E V> * <T:tp> * <of E T> * <of V T> =
 
 val example = test <case z (s z) ([x:exp] z)> ;
 val example2 = test <lam [x] pair x (s x)> ;
-
 val example3  = test <lam [x] x> ;
 val example4  = test <letv (lam [x] x) ([u:exp] pair (app u z) (app u (pair z z)))> ;

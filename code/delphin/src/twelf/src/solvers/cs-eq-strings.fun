@@ -477,7 +477,7 @@ struct
           let
             val U1 = toFgn concat1
             val U2 = toFgn concat2
-            val cnstr = ref (Eqn (G, U1, U2))
+            val cnstr = ref (Eqn (Null, G, U1, U2))
           in
             case (AL1, AL2)
               of (nil, nil) => MultAssign nil

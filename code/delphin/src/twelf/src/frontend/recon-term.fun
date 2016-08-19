@@ -451,9 +451,12 @@ struct
 
     fun findLCID x = findBVar (findConst (findCSConst findOmitted)) x
     fun findUCID x = findBVar (findConst (findCSConst (findEFVar findOmitted))) x
-    fun findPID x = (* This assumes when we encounter a pid, it wasn't already epsilon quantified...
-		     * This is ok since PIDs are only allowed in patterns.
-		     * However, we can also check if it is a BVar first...
+    fun findPID x = (* 
+		     * ADAM Warning:  If it happens to not be a "fvar", then we may get into the following situation:
+		     * [<x>] <x#> => ...
+		     * Since it is a BVar it will THROW out the information that "x" is suppose to be a parameter.
+		     * However, the aim is to get rid of ALL pattern-variable declarations, i.e. "[<x>]", so 
+		     * this won't happen.
 		     *)
                     let
                       fun findFVar fc (G, qid, r) =
@@ -461,7 +464,8 @@ struct
 			   of NONE => fc (G, qid, r)
 			    | SOME name => fvar (name, true (* it is a parameter *), r))
 		    in
-		      (findFVar findOmitted) x
+		      (*  (findFVar findOmitted) x  *)
+		      findBVar (findConst (findCSConst (findFVar findOmitted))) x
 		    end
 
     fun findQUID x = findConst (findCSConst findOmitted) x

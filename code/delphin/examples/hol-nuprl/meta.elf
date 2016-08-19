@@ -1,0 +1,568 @@
+% Meta-theoretic properties of the HOL-Nuprl connection:
+% Every HOL derivation can be translated into a valid Nuprl translation.
+% Author: Carsten Schuermann, Mark-Oliver Stehr.
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Collection of all the lemmas.
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+lemma1: {A:tp} transtp A T -> type.
+%mode lemma1 +TTM -TTP.
+
+lemma2:  {H:tm A} {M:n-tm} transtm H M -> type.
+%mode lemma2 +TM -TTM -TTP.
+
+lemma3: transtp A T -> !- _ # ((T # (uni 1)) n/\ (inh T)) -> type.
+%mode lemma3 +TT -NP.
+
+unique1: transtp A T1  
+	  -> transtp A T2  
+	  -> !- T1 # uni 1
+	  -> !- T2 # uni 1
+	  -> !- M # (T1 ->> T2) 
+	  -> !- M' # (T2 ->> T1) -> type.
+%mode (unique1 +TTP1 +TTP2 -ND1 -ND2 -ND3 -ND4).
+
+unique2 : transtp A T1
+	   -> transtp A T2
+	   -> (T1 ### T2) -> type.
+%mode (unique2 +TTP1 +TTP2 -NEQ).
+
+refl1 : {T:n-tm} T ### T -> type.
+%mode (refl1 +T -NEQ).
+
+unique3 : T1 ### T2 -> !- M # T1 -> !- M # T2 -> type.
+%mode (unique3 +NEQ +ND1 -ND2).
+
+lemma4: transtm (H:tm A) N -> transtp A T -> !- N # T -> type.
+%mode lemma4 +TM -TT -NP.
+
+lemma5 : |- H -> transsen H T -> !- M # T -> type.
+%mode lemma5 +HOL -TTS -NUPRL.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lemma 1: If A type, then A translates into an N'.
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+case-1-1: lemma1 o transtpo.
+
+
+case-1-2: lemma1 (A --> B) (transtp--> TTP1 TTP2)
+	   <- lemma1 A TTP1
+	   <- lemma1 B TTP2.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lemma 2: If M:A is a HOL term then M translates a Nuprl term T
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+case-2-1: lemma2 => =p=> trans=>. 
+
+
+case-2-2: lemma2 (== : tm (A --> A --> o)) _ (trans== TTP)
+		   <- lemma1 A TTP.
+
+
+case-2-3: lemma2 ((H :tm (B --> A)) @ (G:tm B)) _ (trans@  TTM1 TTM2)
+		   <- lemma2 H _ TTM1
+		   <- lemma2 G _ TTM2.
+
+
+case-2-4: lemma2 (\ H : tm (A --> B)) _(trans\ TTP TTM)
+	  <- lemma1 A TTP
+	  <- ({x:tm _}{y:n-tm}{w:y ### y} {ttm:transtm x y} 
+		lemma2 x y ttm 
+		-> refl1 y w
+		-> lemma2 (H x) _ (TTM x y ttm)).
+
+
+case-2-5: lemma2 true _ tc-true.
+
+
+case-2-6: lemma2 false _ tc-false.
+
+
+case-2-7: lemma2 neg _ tc-neg.
+
+
+case-2-8: lemma2 /|\ _ tc-/|\. 
+
+
+case-2-9: lemma2 \|/ _ tc-\|/.
+
+
+case-2-10: lemma2 (all|: tm ((A --> o) --> o)) _ (tc-all| TTP)
+		    <- lemma1 A TTP.
+
+
+case-2-11: lemma2 (ex|: tm ((A --> o) --> o)) _ (tc-ex| TTP)
+		    <- lemma1 A TTP.
+
+
+case-2-12: lemma2 (the|: tm ((A --> o) --> A)) _ (tc-the| TTP)
+		    <- lemma1 A TTP.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lemma 3: If type A translates into T, then |- T # uni 1 /\ inh T.
+% (Lemma 7.5.1 in Stehr's thesis)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+case-3-1: lemma3 transtpo 
+	  (sig-intro 
+	     (ax-intro 
+		(sum-form (unit-form :!- unit # (uni 1)) unit-form)) 
+	     (sig-intro (sum-inl unit-intro (unit-form:!- unit # (uni 1)))
+		unit-intro)).
+
+
+case-3-2: lemma3 (transtp--> TTP1 TTP2) 
+	  (sig-intro 
+	     (ax-intro 
+		(fun-form 
+		   (ax-elim (sig-fst ND1)) [_] [_] 
+		   ax-elim (sig-fst ND2))) 
+	     (sig-intro (fun-intro (ax-elim (sig-fst ND1)) [_] [_] 
+			   (sig-fst (sig-snd ND2))) unit-intro))
+	  <- lemma3 TTP2 ND2
+	  <- lemma3 TTP1 ND1. 
+
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Uniqueness Lemma 1: 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+unique1--> : unique1 (transtp--> TTP2 TTP1) (transtp--> TTP2' TTP1') 
+	      (fun-form ND1' [_][_] ND1)
+	      (fun-form ND2' [_][_] ND2)
+	      (fun-intro (fun-form ND1' [_] [_] ND1) [_] [u] fun-intro ND2' [_] [v] 
+		 fun-elim ND3 (fun-elim u (fun-elim ND4' v)))
+	      (fun-intro (fun-form ND2' [_] [_] ND2) [_] [u] fun-intro ND1' [_] [v]
+		 fun-elim ND4 (fun-elim u (fun-elim ND3' v)))
+	      <- unique1 TTP1 TTP1' ND1 ND2 ND3 ND4
+	      <- unique1 TTP2 TTP2' ND1' ND2' ND3' ND4'.
+
+unique1o   : unique1 transtpo transtpo boolean-form boolean-form
+	      (fun-intro boolean-form [_][u]u) 
+	      (fun-intro boolean-form [_][u]u).					       
+
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Uniqueness Lemma 2: 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+unique2--> : unique2 (transtp--> TTP2 TTP1) (transtp--> TTP2' TTP1') (eqpi ([_][_] NEQ1) NEQ2)
+	       <- unique2 TTP2 TTP2' NEQ2
+	       <- unique2 TTP1 TTP1' NEQ1.
+unique2o : unique2 transtpo transtpo (eq+ equnit equnit).
+
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Reflexivity Lemma 1: 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+refl1-uni : refl1 (uni K) equni.
+
+refl1-app : refl1 (app T1 T2)  (eqapp NEQ2 NEQ1)
+	     <- refl1 T1 NEQ1
+	     <- refl1 T2 NEQ2.
+refl1-lam : refl1 (lam T) (eqlam NEQ)
+	     <- ({x:n-tm}{u: x ### x} refl1 x u -> refl1 (T x) (NEQ x u)).
+
+refl1-pi : refl1 (pi T1 T2) (eqpi NEQ2 NEQ1)
+	    <- refl1 T1 NEQ1
+	    <- ({x:n-tm}{u: x ### x} refl1 x u -> refl1 (T2 x) (NEQ2 x u)).
+
+refl1-sigma : refl1 (sigma T1 T2) (eqsigma NEQ2 NEQ1)
+	    <- refl1 T1 NEQ1
+	    <- ({x:n-tm}{u: x ### x} refl1 x u -> refl1 (T2 x) (NEQ2 x u)).
+
+refl1-eq  : refl1 (eq T1 T2 T3) (eqeq NEQ3 NEQ2 NEQ1)
+	     <- refl1 T1 NEQ1
+	     <- refl1 T2 NEQ2
+	     <- refl1 T3 NEQ3.
+
+
+refl1-+  : refl1 (T1 + T2) (eq+ NEQ2 NEQ1)
+	     <- refl1 T1 NEQ1
+	     <- refl1 T2 NEQ2.
+
+
+refl1-inl  : refl1 (inl T) (eqinl NEQ)
+	     <- refl1 T NEQ.
+
+refl1-inr  : refl1 (inr T) (eqinr NEQ)
+	     <- refl1 T NEQ.
+
+refl1-decide : refl1 (decide T1 T2 T3) (eqdecide NEQ3 NEQ2 NEQ1)
+	    <- refl1 T1 NEQ1
+	    <- ({x:n-tm}{u: x ### x} refl1 x u -> refl1 (T2 x) (NEQ2 x u))
+	    <- ({x:n-tm}{u: x ### x} refl1 x u -> refl1 (T3 x) (NEQ3 x u)).
+
+refl1-void : refl1 void eqvoid.
+
+refl1-any  : refl1 (any T) (eqany NEQ)
+	     <- refl1 T NEQ.
+
+refl1-unit : refl1 unit equnit.
+
+refl1-bullet : refl1 bullet eqbullet.
+
+refl1-inhabited : refl1 inhabited eqinhabited.
+
+refl1-pair : refl1 (pair T1 T2)  (eqpair NEQ2 NEQ1)
+	     <- refl1 T1 NEQ1
+	     <- refl1 T2 NEQ2.
+
+refl1-fst  : refl1 (fst T) (eqfst NEQ)
+	     <- refl1 T NEQ.
+
+refl1-snd  : refl1 (snd T) (eqsnd NEQ)
+	     <- refl1 T NEQ.
+
+refl1-axiom : refl1 axiom eqaxiom.
+
+
+refl1-set : refl1 (set T1 T2) (eqset NEQ2 NEQ1)
+	    <- refl1 T1 NEQ1
+	    <- ({x:n-tm}{u: x ### x} refl1 x u -> refl1 (T2 x) (NEQ2 x u)).
+
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Uniqueness Lemma 3: 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+unique3-1 : unique3 NEQ (equality-trans ND1 ND2) (equality-trans ND1' ND2')
+	     <- unique3 NEQ ND1 ND1'
+	     <- unique3 NEQ ND2 ND2'.
+
+unique3-2 : unique3 NEQ (equality-form ND3 ND2 ND1) (equality-form ND3 ND2 ND1')
+	     <- unique3 NEQ ND1 ND1'.
+
+unique3-3 : unique3 (eqeq NEQ3 NEQ2 NEQ1) (ax-intro ND3) (ax-intro ND3')
+	     <- unique3 NEQ3 ND3 ND3'.
+
+unique3-4 : unique3 NEQ (ax-elim ND) (ax-elim ND')
+	     <- refl1 _ NEQ'
+	     <- unique3 (eqeq NEQ NEQ' NEQ') ND ND'.
+
+unique3-5 : unique3 NEQ (fun-form ND2 ND1) (fun-form ND2' ND1')
+	     <- unique3 NEQ ND2 ND2'
+	     <- refl1 _ NEQ'
+	     <- ({x:n-tm} {u: !- x # _} {w: x ### x} refl1 x w -> unique3 (NEQ'' x w) u u -> unique3 NEQ (ND1 x u) (ND1' x u)).
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lemma 4: If M:A translates into N 
+%          and  A translates into T
+%          then !- N # T.
+% (Lemma 7.5.2 in Stehr's thesis)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+
+case-4-1: lemma4 trans=> (transtp--> transtpo (transtp--> transtpo transtpo))
+	       (fun-intro (sum-form (unit-form : !- unit # uni 1) 
+			     (unit-form : !- unit # uni 1)) [_] [u1] 
+		  fun-intro (sum-form (unit-form : !- unit # uni 1) 
+			       (unit-form: !- unit # uni 1)) [_] [u2] 
+		  boolean-if boolean-form u1 u2 boolean-tt).
+
+
+case-4-2: lemma4 (trans== TTP) (transtp--> TTP (transtp--> TTP transtpo))
+	       (fun-intro (ax-elim (n/\-fst ND)) [_] [u1] 
+		  fun-intro (ax-elim (n/\-fst ND)) [_] [u2]
+		  sum-decide ([_][_] boolean-form) 
+		  (fun-elim inh-intro (equality-form u2 u1 (ax-elim (n/\-fst ND)))) 
+		  ([_][_] boolean-tt) ([_][_] boolean-ff))
+	       <- lemma3 TTP ND.
+
+
+case-4-3: lemma4 (trans@ TTM1 TTM2) TTP (fun-elim ND1 ND2)
+	       <- lemma4 TTM2 TTP1' ND2'
+	       <- lemma4 TTM1 (transtp--> TTP1 TTP) ND1
+	       <- unique2 TTP1' TTP1 NEQ
+	       <- unique3 NEQ ND2' ND2.
+
+	       % <- unique1 TTP1' TTP1 A B C D.
+
+
+case-4-4: lemma4 (trans\ TTP1 TTM) (transtp--> TTP1 TTP2) 
+	             (fun-intro (ax-elim (n/\-fst ND1)) ND2)
+	       <- lemma3 TTP1 ND1
+
+	       <- ({x:tm _} {y:n-tm} {ttm:transtm x y} 
+		     lemma2 x y ttm 
+		     -> {u: !- y # _}  lemma4 ttm TTP1 u
+		     -> lemma4 (TTM x y ttm) TTP2 (ND2 y u)).
+
+
+case-4-5 : lemma4 tc-true transtpo boolean-tt.
+
+
+case-4-6 : lemma4 tc-false transtpo boolean-ff.
+
+
+case-4-7 : lemma4 tc-neg 
+		(transtp--> transtpo transtpo) 
+		(fun-intro boolean-form ([x] [u] boolean-if boolean-form u boolean-ff boolean-tt)).
+
+
+case-4-8 : lemma4 tc-/|\ 
+		    (transtp--> transtpo (transtp--> transtpo transtpo))
+		(fun-intro boolean-form [x] [u] fun-intro boolean-form [y] [v] 
+		   boolean-if boolean-form u v boolean-ff).
+
+
+case-4-9 : lemma4 tc-\|/ 
+		    (transtp--> transtpo (transtp--> transtpo transtpo)) 
+		(fun-intro boolean-form [_] [u] fun-intro boolean-form [_] [v] 
+		   boolean-if boolean-form u boolean-tt v).
+
+
+case-4-10: lemma4 (tc-all| TTP)
+		    (transtp--> (transtp--> TTP transtpo) transtpo) 
+		(fun-intro (fun-form (ax-elim (n/\-fst ND)) [_][_] boolean-form) 
+		   ([_][u] v-form 
+		      (fun-form (ax-elim (n/\-fst ND)) 
+			 [_] [v] ^-form _ (fun-elim u v))))
+		<- lemma3 TTP ND.
+
+
+case-4-11: lemma4 (tc-ex| TTP) 
+		(transtp--> (transtp--> TTP transtpo) transtpo) 
+		(fun-intro (fun-form (ax-elim (n/\-fst ND)) [_] [_] boolean-form)
+		   [x][u] v-form 
+		   (sig-form (ax-elim (n/\-fst ND)) 
+		      [_] [v] ^-form _ (fun-elim u v)))
+		<- lemma3 TTP ND.
+
+
+case-4-12: lemma4 (tc-the| TTP)
+		    (transtp--> (transtp--> TTP transtpo) TTP) 
+		(fun-intro (fun-form (ax-elim (n/\-fst ND)) [_] [_ : !- _ # T] boolean-form) 
+		   [x] [u] sum-decide ([_][_] ax-elim (n/\-fst ND)) (fun-elim inh-intro 
+						 (set-form (ax-elim (n/\-fst ND)) 
+						    ([y][v] ^-form (app x y) (fun-elim u v))))
+		   ([_] [v] set-elem ([z][w] boolean-decide ([_] [_] uni-form (+>= 1 0>=0)) 
+					(fun-elim u w)
+					unit-form
+					void-form) v)
+		   ([_] [_] arb-intro _ ND))
+		<- lemma3 TTP ND.
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lemma 7.5.3 : If D |- A ia a  HOL proof then D translates into 
+%               a  Nuprl term proof D' |- B
+%               where B is the translation of A
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+case-5-1 : lemma5 (mp (D1:|- H) (D2 : |- H ==> G)) (t-base TTM2') 
+		(nall-elim (nall-elim (nall-elim (nall-elim mp_lemma ND4) ND3) ND2) ND1)
+		<- lemma2 H _ TTM
+		<- lemma2 (H ==> G) _ (trans@ (trans@ trans=> TTM2) TTM2')
+		<- lemma4 TTM transtpo ND4
+		<- lemma4 TTM2' transtpo ND3
+		<- lemma5 D1 (t-base TTM) ND1 
+		<- lemma5 D2 (t-base (trans@ (trans@ trans=> TTM2) TTM2')) ND2.
+
+
+case-5-2 : lemma5 (disch (D : |- H -> |- G)) (t-base (trans@ (trans@ trans=> TTM1) TTM2)) 
+		   (=n=>-elim (nall-elim (nall-elim disch_lemma ND1) ND2)
+					    (=n=>-intro (boolean-if (uni-form (+>= 1 0>=0)) ND1 (ntrue-form)  nfalse-form) ND))
+		<- lemma2 H _ (TTM1 : transtm H T1)
+		<- lemma2 G _ (TTM2 : transtm G T2)
+		<- lemma4 TTM1 transtpo ND1
+		<- lemma4 TTM2 transtpo ND2
+		<- ({u:|- H}{y:n-tm}{v:!- y # ^ T1} 
+		      lemma5 u (t-base TTM1) v
+		      -> lemma5 (D u) (t-base TTM2) (ND y v)).
+
+
+case-5-3 : lemma5 (refl : |- H === H) (t-base (trans@ (trans@ (trans== TTP) TTM) TTM))
+		      (nall-elim (nall-elim refl_lemma boolean-form) ND)
+	     <- lemma2 H _ TTM
+	     <- lemma4 TTM TTP ND.
+
+
+case-5-4 : lemma5 (beta : |- (\ H) @ G === (H G)) 
+		   (t-base (trans@ (trans@ (trans== TTP1) 
+				      (trans@ (trans\ TTP2 TTM1) TTM2)) (TTM1 _ _ TTM2)))
+		   (nall-elim 
+		      (nall-elim 
+			 (nall-elim
+			    (=n=>-elim beta_lemma (ax-elim (n/\-fst ND1))) 
+			    (fun-elim (fun-intro (ax-elim (n/\-fst ND2)) ND3) ND4))
+			 (ND3 _ ND4)) 
+		      (subst ([_][w] equality-form (ND3 _ ND4) w (ax-elim (n/\-fst ND1)))
+			 (fun-beta ND3 ND4)
+			 (ax-intro (ND3 _ ND4))))
+		<- ({x:tm _}{y:n-tm} {ttm:transtm x y} 
+		      lemma2 x _ ttm 
+		      -> lemma2 (H x) _ (TTM1 x y ttm))
+		<- lemma2 G _ TTM2
+		<- lemma4 TTM2 TTP2 ND4
+		<- ({x:tm _} {y:n-tm} {ttm:transtm x y} 
+		      lemma2 x y ttm -> 
+		      {u: !- y # _} lemma4 ttm TTP2 u
+		      -> lemma4 (TTM1 x y ttm) TTP1 (ND3 y u))
+		<- lemma3 TTP1 ND1
+		<- lemma3 TTP2 ND2.
+
+ 
+case-5-5 : lemma5 (abs D1 : |- \ ([x:tm A] H x) === \ G) 
+		(t-base (trans@ (trans@ (trans== (transtp--> TTP1 TTP2))
+				   (trans\ TTP1 TTM1)) (trans\ TTP1 TTM2)))
+		(=n=>-elim (nall-elim 
+			     (nall-elim (nall-elim beta_lemma 
+					   (fun-form (ax-elim (n/\-fst ND1)) 
+					      ([_][_] ax-elim (n/\-fst ND2))))
+				(fun-intro (ax-elim (n/\-fst ND1)) ND3)) 
+			     (fun-intro (ax-elim (n/\-fst ND1)) ND4)) 
+		   (ax-intro (fun-xi1 
+				([x][u] ax-elim 
+				   (=n=>-elim 
+				      (nall-elim 
+					 (nall-elim (nall-elim 
+						       beta_inverse 
+						       (ax-elim (n/\-fst ND2))) 
+					    (ND3 x u)) 
+					 (ND4 x u))
+				      (ND5 x u))) 
+				(ax-elim (n/\-fst ND1)))))
+		<- lemma1 A TTP1 
+		<- ({x:tm _}{y:n-tm} {ttm:transtm x y} 
+		      lemma2 x _ ttm 
+		      -> lemma2 (H x) _ (TTM1 x y ttm))
+		<- ({x:tm _}{y:n-tm} {ttm:transtm x y} 
+		      lemma2 x _ ttm 
+		      -> lemma2 (G x) _ (TTM2 x y ttm))
+		<- ({x:tm _} {y:n-tm} {ttm:transtm x y} 
+		      lemma2 x y ttm -> 
+		      {u: !- y # _} lemma4 ttm TTP1 u
+		      -> lemma4 (TTM1 x y ttm) TTP2 (ND3 y u))
+		<- ({x:tm _} {y:n-tm} {ttm:transtm x y}  
+		      lemma2 x _ ttm -> {u: !- y # _} 
+		      lemma4 ttm TTP1 u
+		      -> lemma4 (TTM2 x y ttm) TTP2 (ND4 y u))
+		<- ({x:tm _} {y:n-tm} {ttm:transtm x y}
+		      lemma2 x _ ttm 
+		      -> {u: !- y # _} lemma4 ttm TTP1 u
+		      -> lemma5 (D1 x) 
+			 (t-base (trans@ (trans@ (trans== TTP2) 
+					    (TTM1 x y ttm)) 
+				    (TTM2 x y ttm))) (ND5 y u))
+		<- lemma3 TTP1 ND1
+		<- lemma3 TTP2 ND2.
+
+
+case-5-6 : lemma5 (sub ([x:tm A] G x) 
+			      (D1 : |- H1 === H2) 
+			      (D2 : |- G H1)) 
+		 (t-base (TTM3 _ _ TTM2))
+		 (subst' ([x][u] u)
+		    (fun-beta ([x] [u] ^-form (M x) (ND6 x u)) ND4)
+		    (=n=>-elim 
+		       (=n=>-elim 
+			  (=n=>-elim 
+			     (nall-elim 
+				(nall-elim 
+				   (nall-elim 
+				      subst_lemma 
+				      (ax-elim (n/\-fst ND2)))
+				   ND3) 
+				ND4)
+			     (fun-intro (ax-elim (n/\-fst ND2)) [x] [u] ^-form (M x) (ND6 x u))) 
+			  ND1)
+		        (subst ([x] [u] u) 
+			   (fun-beta ([x] [u] ^-form (M x) (ND6 x u)) ND3) 
+			   ND5))
+		    )
+		 <- ({x:tm _}{y:n-tm} {ttm:transtm x y} 
+		       lemma2 x y ttm 
+		       -> lemma2 (G x) (M y) (TTM3 x y ttm))
+		 <- lemma5 D1 (t-base (trans@ (trans@ (trans== TTP1) TTM1) TTM2)) ND1
+		 <- lemma3 TTP1 ND2
+		 <- lemma4 TTM1 TTP1 ND3
+		 <- lemma4 TTM2 TTP1 ND4
+		 <- lemma5 D2 (t-base (TTM3 _ _ TTM1)) ND5
+		 <- ({x:tm A} {y:n-tm} {ttm:transtm x y} 
+		       lemma2 x y ttm 
+		       -> {u: !- y # _} lemma4 ttm TTP1 u
+		       -> lemma4 (TTM3 x y ttm) transtpo (ND6 y u)).
+
+%block r0 :  block {x:n-tm} {u: x ### x} {h: refl1 x u}.
+
+%block b0 : some {T:tp}
+	     block {x:tm T} {y:n-tm}{w: y ### y} {u:transtm x y}  {l2:lemma2 x y u}  {h: refl1 y w}.
+
+%block b1 : some {T:tp}{N:n-tm}{TP:transtp T N}
+	     block {x:tm T} {y:n-tm} {w: y ### y} {u:transtm x y}  {l2:lemma2 x y u}  {h: refl1 y w}
+	       {v : !- y # N} {l4:lemma4 u TP v}.
+
+%block b2 : some {A:tm o} {T1:n-tm} {TTMA : transtm A T1}
+ 	     block {u:|- A}{n:n-tm} {w: n ### n} {q: refl1 n w} {h:!- n # ^ T1} {k:lemma5 u (t-base TTMA) h}.
+
+
+% Lemma Reflexivity 1
+%worlds (r0 | b1 | b2) (refl1 _ _).
+%total N (refl1 N NEQ).
+
+% Lemma 1
+%worlds (b0 | b1 | b2) (lemma1 _ _).
+%unique lemma1 +A -1TTP. 
+%terminates TT (lemma1 TT _).
+%covers (lemma1 +TT -NP).
+%total TT (lemma1 TT _).
+
+% Lemma 2
+%worlds ( b0 | b1 | b2) (lemma2 _ _ _).
+%terminates TT (lemma2 TT _ _).
+%covers (lemma2 +TT -K -NP).
+%total TT (lemma2 TT K NP).
+
+% Lemma 3
+%worlds (b1 | b2) (lemma3 _ _).
+%unique lemma3 +A -1D. 
+%terminates TT (lemma3 TT _).
+%covers (lemma3 +TT -NP).
+%total TT (lemma3 TT NP).
+
+% Lemma Unique 1
+%worlds (b1 | b2) (unique1 _ _ _ _ _ _).
+%total TTP1 (unique1 TTP1 TTP2 ND1 ND2 ND3 ND4).
+
+
+% Lemma Unique 2
+%worlds (b1 | b2) (unique2 _ _ _).
+%total TTP1 (unique2 TTP1 TTP2 NEQ).
+
+% Lemma Unique 3
+%worlds (b1 | b2) (unique3 _ _ _).
+%total ND1 (unique3 NEQ ND1 ND2).
+
+% Lemma 4
+%worlds (b1 | b2) (lemma4 _ _ _).
+%terminates TT (lemma4 TT _ _).
+%covers (lemma4 +TT -TT' -NP).
+%total TT (lemma4 TT _ NP).  
+
+% Lemma 5
+%worlds (b1 | b2) (lemma5 _ _ _).
+%terminates TT (lemma5 TT _ _).
+%covers (lemma5 +TT -TT' -NP).
+% total TT (lemma5 TT _ _).

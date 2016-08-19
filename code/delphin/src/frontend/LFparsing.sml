@@ -48,13 +48,27 @@ structure LFparsing =
     fun installConDec fromCS (conDec, fileNameocOpt as (fileName, ocOpt), r) =
 	let
 	  val _ = (Timers.time Timers.modes ModeCheck.checkD) (conDec, fileName, ocOpt)
+
+	  (* ABP:  Check freeze before adding it to the signature *)
+	  val _ = (case conDec 
+	          of I.ConDec (name, _, _, _, _, _) => 
+		                (case I.targetFamOpt (I.conDecType conDec)
+				   of SOME a => Subordinate.checkFreeze(name, a)
+				    | _ => ())
+		   | I.SkoDec (name, _, _, _, _) => 
+		                (case I.targetFamOpt (I.conDecType conDec)
+				   of SOME a => Subordinate.checkFreeze(name, a)
+				    | _ => ())
+		   | _ => ())
+	       handle Subordinate.Error msg => raise Subordinate.Error (Paths.wrapLoc(Paths.Loc (fileName,r),msg))
+
 	  val cid = IntSyn.sgnAdd conDec
 	  val _ = (case (fromCS, !context)
 		     of (IntSyn.Ordinary, SOME namespace) => Names.insertConst (namespace, cid)
 		      | (IntSyn.Clause, SOME namespace) => Names.insertConst (namespace, cid)
 		      | _ => ())
 	          handle Names.Error msg =>
-		    raise Names.Error (Paths.wrap (r, msg))
+		    raise Names.Error (Paths.wrapLoc(Paths.Loc (fileName,r),msg))
 	  val _ = Names.installConstName cid
 	  val _ = installConst fromCS (cid, fileNameocOpt)
 	  val _ = Origins.installLinesInfo (fileName, Paths.getLinesInfo ())
@@ -70,7 +84,7 @@ structure LFparsing =
 		        (* (Clause, _) should be impossible *)
 		      | _ => ())
 	           handle Names.Error msg =>
-		     raise Names.Error (Paths.wrap (r, msg))
+		     raise Names.Error (Paths.wrapLoc(Paths.Loc (fileName,r),msg))
 	  val _ = Names.installConstName cid
 	  val _ = Origins.installLinesInfo (fileName, Paths.getLinesInfo ())
 	in 
@@ -125,7 +139,7 @@ structure LFparsing =
 	   icd optConDec
 	 end
 	 handle Constraints.Error (eqns) =>
-	        raise ReconTerm.Error (Paths.wrap (r, constraintsMsg eqns)))
+	        raise ReconTerm.Error (Paths.wrapLoc(Paths.Loc (fileName,r),constraintsMsg eqns)))
 
 
       | install1 (fileName, (Parser.AbbrevDec condec, r)) =
@@ -154,7 +168,7 @@ structure LFparsing =
 	  icd optConDec
 	end
         handle Constraints.Error (eqns) =>
-	       raise ReconTerm.Error (Paths.wrap (r, constraintsMsg eqns)))
+	       raise ReconTerm.Error (Paths.wrapLoc(Paths.Loc (fileName,r),constraintsMsg eqns)))
 
 
 
@@ -173,7 +187,7 @@ structure LFparsing =
 		 in
 		   NONE
 		 end
-	 handle Names.Error (msg) => raise Names.Error (Paths.wrap (r,msg)))
+	 handle Names.Error (msg) => raise Names.Error (Paths.wrapLoc(Paths.Loc (fileName,r),msg)))
 
       (* Name preference declaration for printing *)
       | install1 (fileName, (Parser.NamePref ((qid,r), namePref), _)) =
@@ -182,7 +196,7 @@ structure LFparsing =
                                          ^ Names.qidToString (valOf (Names.constUndef qid))
                                          ^ " in name preference")
             | SOME cid => (Names.installNamePref (cid, namePref) ; NONE)
-	 handle Names.Error (msg) => raise Names.Error (Paths.wrap (r,msg)))
+	 handle Names.Error (msg) => raise Names.Error (Paths.wrapLoc(Paths.Loc (fileName,r),msg)))
 
 
       | install1 (filename, P) = raise Domain

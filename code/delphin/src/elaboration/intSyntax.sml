@@ -5,6 +5,8 @@ structure DelphinIntSyntax =
 
 struct
 
+  type fileInfo = (string * Paths.region) option
+
   structure I = IntSyn
   exception SubstFailed
 
@@ -18,6 +20,13 @@ struct
     = Visible
     | Implicit
 
+
+  datatype World
+    = Anything
+    | VarList of ((Dec I.Ctx) * I.Exp) list
+              (* Gi |- Ai : type *)
+              (* VarList [(Gi,Ai)] *)
+    | NonWeakenable of World (* For functions only partially covered... used for parameter functions *)
     
 
   and Types
@@ -27,11 +36,11 @@ struct
 
   and Cnstr =
       Solved
-    | EqnF of (I.Dec I.Ctx) * Formula * Formula (* G |- F1 == F2 *)
+    | EqnF of (I.Dec I.Ctx) * (I.Dec I.Ctx) * Formula * Formula (* Gglobal,G |- F1 == F2 *)
 
   and Formula
     = Top
-    | All     of Visibility * NormalDec * Formula
+    | All     of Visibility * (World option) * NormalDec * Formula
     | Exists  of NormalDec * Formula 
     | Nabla   of NewDec * Formula
     | FormList of (Formula list)  (* Non-dependent pair generalization.. used only as enhancement for mutual recursion *)
@@ -41,7 +50,7 @@ struct
     | FClo    of Formula * I.Sub (* Enhancement to speed things up *)
 
   and NormalDec 
-    = NormalDec of ((string) list) option * Types 
+    = NormalDec of ((string) list) option * Types
        (* takes a "list" of strings to accomodate mutual recursion 
 	* If it just has one element then it means it does not
 	* need to undergo a projection.
@@ -57,15 +66,19 @@ struct
 
   and BoundVar
     = Fixed of int
-    | BVarMeta of (BoundVar option) ref * Sub
-    | BVarLF of (I.BoundVar option) ref * I.Sub
+    | BVarMeta of ((BoundVar option) ref * Formula) * Sub
+    | BVarLF of ((I.BoundVar option) ref * I.Exp * (int list)) * I.Sub  (*  (r:A, list) [t] *)
 
   and Exp
-    = Var    of BoundVar (* Either "Fixed i" or a variable  *)
+    = Var    of BoundVar * fileInfo (* Either "Fixed i" or a variable  *)
     | Quote  of I.Exp
     | Unit
-    | Lam    of (CaseBranch list) * Formula (* we need to save the type of the lam as it is not inferrible *)
-    | New    of NewDec * Exp
+    | Lam    of (CaseBranch list) * Formula * fileInfo
+                      (* we need to save the type of the lam as it is not inferrible *)
+                      (* we also save the "filename" and "region" information to print out better messages
+		       *)
+
+    | New    of NewDec * Exp * fileInfo (* fileInfo is for error messages as in Lam*)
     | App    of Visibility * Exp * Exp
     | Pair   of Exp * Exp * Formula (* we need to save the type of pair as it is not inferrible *)
     | ExpList of Exp list (* generalization useful for mutual recursion, all must have formula type! *)
@@ -79,7 +92,7 @@ struct
     | Pop    of int * Exp (* int >= 1 *)
     | Fix    of NormalDec * Exp (* Note that this Exp will be "ExpList" for mutual recursion.. not a pair *)
 
-    | EVar   of Exp option ref * Sub     (* type MUST be Formulas *)
+    | EVar   of (Exp option ref * Formula) * Sub     (* (X : F) [s] *)
                  (* Meta-level EVars are VERY weak.. 
 		  * used to specify epsilon variables
 		  * in case analysis, and that is it.
@@ -91,9 +104,9 @@ struct
  
   and CaseBranch
     = Eps of NormalDec * CaseBranch
-    | NewC of NewDec * CaseBranch
+    | NewC of NewDec * CaseBranch * fileInfo
     | PopC of int * CaseBranch
-    | Match of Exp * Exp (* pattern => result *)
+    | Match of Visibility * Exp * Exp (* pattern => result *)
     | MatchAnd of Visibility * Exp * CaseBranch (* pattern and case.. . used to indicate delayed evaluation of case
 						 * to look at second case with it
 						 * (may be implicit)
@@ -112,6 +125,8 @@ struct
     = Prg of Exp 	         (*     | p                    *)
     | Undef                     
 
+  type decCtx = Dec I.Ctx
+
   (* End of Internal Syntax Specification
    * Now we define functions related to Substitution and such
    *)
@@ -125,7 +140,9 @@ struct
     | VarRef of BoundVar (* Won't be "Fixed" *)
     
 
-
+  fun coerceBoundVar (Fixed i) = SOME(I.Root (I.BVar (I.Fixed i), I.Nil))
+    | coerceBoundVar (BVarLF ((r,A,list), s)) = SOME(I.Root (I.BVar (I.BVarVar ((r,A,list), s)), I.Nil))
+    | coerceBoundVar _ = NONE
 
   fun shiftTo (0, t) = t
     | shiftTo (i, t) = Shift (shiftTo (i-1,t))
@@ -151,7 +168,7 @@ struct
      then G,A[t] |- dot1 t : G',A
   *)
   fun dot1 (id) = id
-    | dot1 t = Dot (Prg (Var (Fixed 1)), Shift t)
+    | dot1 t = Dot (Prg (Var (Fixed 1, NONE)), Shift t)
 
 
   (* Whnf is designed to make sure it gets rid of instantiated ?Var's
@@ -162,28 +179,29 @@ struct
 
   (* removes top instantiate EVars, EClo, and BVars *)
   (* may raise SubstFailed *)
-  fun whnfE (EVar (ref (SOME E), t)) = whnfE (substE'(E,t))
+  fun whnfE (EVar ((ref (SOME E),_), t)) = whnfE (substE'(E,t))
     | whnfE (EClo (E, t)) = whnfE (substE'(E, t))
-    | whnfE (Var (Fixed i)) = Var (Fixed i)
-    | whnfE (Var B) = (case whnfBVar (B, id)
+    | whnfE (Var ((Fixed i), fileInfo)) = Var ((Fixed i), fileInfo)
+    | whnfE (Var (B, fileInfo)) = 
+                     (case whnfBVar (B, id)
 			 of (MetaSub (i, s)) => whnfE (bvarSub(i, s))
 			  | (LFSub (i, s)) => (case (I.bvarSub(i, s))
-						 of (I.Idx k') => Var (Fixed k')
+						 of (I.Idx k') => Var (Fixed k', fileInfo)
 						  | (I.Exp U) => Quote U
 						  | I.Block _ => raise Domain
 						  | I.Undef => raise SubstFailed
 						)
-			  | (VarRef B') => Var B')
+			  | (VarRef B') => Var (B', fileInfo))
     | whnfE E = E
 
   (* Returns whnfBVarResult *)
   and whnfBVar (Fixed k, s) = MetaSub(k, s)
-    | whnfBVar (BVarMeta (ref (SOME B), t), s) = whnfBVar(B, comp(t, s))
-    | whnfBVar (BVarMeta (r as ref NONE, t), s) = VarRef (BVarMeta (r, comp(t,s)))
-    | whnfBVar (BVarLF (ref (SOME B), t), s) = (case (Whnf.whnfBVar (B, I.comp(t, coerceSub s)))
+    | whnfBVar (BVarMeta ((ref (SOME B), _), t), s) = whnfBVar(B, comp(t, s))
+    | whnfBVar (BVarMeta ((r as ref NONE, F), t), s) = VarRef (BVarMeta ((r, F (* warning.. not in whnf *) ), comp(t,s)))
+    | whnfBVar (BVarLF ((ref (SOME B), _, _), t), s) = (case (Whnf.whnfBVar (B, I.comp(t, coerceSub s)))
 						  of (I.Fixed k', s') => LFSub(k', s')
-						   | (I.BVarVar(B',s), _ (* id *)) => VarRef (BVarLF (B',s)))
-    | whnfBVar (BVarLF (r as ref NONE, t), s) = VarRef (BVarLF (r, I.comp(t, coerceSub s)))
+						   | (I.BVarVar((r,A,list),s), _ (* id *)) => VarRef (BVarLF ((r,A,list),s)))
+    | whnfBVar (BVarLF ((r as ref NONE, A,list), t), s) = VarRef (BVarLF ((r, A,list), I.comp(t, coerceSub s)))
 
   (* removes top level FVars and FClo *)
   and whnfF (FVar ((G, ref (SOME F), cnstrs), t)) = whnfF (substF'(F, t)) (* cnstrs should be empty *)
@@ -192,7 +210,7 @@ struct
 
   (* substF' takes a meta-level formula under an LF substitution *)
   and substF'(Top, _) = Top
-    | substF'(All (visible, D, F), t) = All (visible, substNormalDec (D, t), FClo(F, I.dot1 t))
+    | substF'(All (visible, W, D, F), t) = All (visible, W, substNormalDec (D, t), FClo(F, I.dot1 t))
     | substF'(Exists (D, F), t) = Exists (substNormalDec (D, t), FClo(F, I.dot1 t))
     | substF'(Nabla (D, F), t) = Nabla (substNewDec (D, t), FClo(F, I.dot1 t))
     | substF'(FormList Flist, t) = FormList (map (fn F => FClo(F, t)) Flist) 
@@ -229,19 +247,19 @@ struct
 	    I.Idx n
 	  end handle Whnf.Eta => I.Exp M)
 
-    | coerceExpN (Var (Fixed i)) = I.Idx i
+    | coerceExpN (Var (Fixed i, _)) = I.Idx i
 	   (* It is possible that this is a meta-variable not accessible
 	    * on the LF-level, but there is no harm in putting code their
 	    * instead of Undef... it will never access it by invariant
 	    *)
 
-    | coerceExpN (Var B) = 
+    | coerceExpN (Var (B, fileInfo)) = 
 	     (case (whnfBVar (B, id))
 	       of LFSub(k, s) => I.bvarSub(k, s)
 		| MetaSub(k', s) => (coerceExp(bvarSub(k', s)) handle SubstFailed => I.Undef)
 	        | VarRef (Fixed _) => raise Domain (* impossible by invariant *)
 		| VarRef (BVarMeta _) => I.Undef
-		| VarRef (BVarLF (B', s)) (* Param Variable *) => I.Exp (I.Root (I.BVar (I.BVarVar (B', s)), I.Nil))
+		| VarRef (BVarLF ((r,A,list), s)) (* Param Variable *) => I.Exp (I.Root (I.BVar (I.BVarVar ((r,A,list), s)), I.Nil))
                                               (* ABP WARNING:  This MAY break LF invariant that
 					       *               All indices are referred to as "Idx"
 					       *               When B is eventually instantiated
@@ -252,7 +270,7 @@ struct
 					       *)
 		 )
 
-    | coerceExpN (EVar (ref (SOME _), _)) = raise Domain (* invariant violated, not in whnf *)
+    | coerceExpN (EVar ((ref (SOME _), _), _)) = raise Domain (* invariant violated, not in whnf *)
     | coerceExpN (EClo _) = raise Domain (* invariant violated, not in whnf *)
     | coerceExpN _ = I.Undef
     
@@ -280,7 +298,7 @@ struct
 
 
   and getIndex E = (case (whnfE(E))
-                    of (Var B) => getIndex' B
+                    of (Var (B, _)) => getIndex' B
 		     | _ => NONE
 		      )
   and getIndex' (Fixed k) = SOME k
@@ -288,7 +306,7 @@ struct
     (case (whnfBVar (B, id))
        of (MetaSub (k, s)) =>
 	    ((case bvarSub (k, s)
-		of (Var B') => getIndex' B'
+		of (Var (B', _)) => getIndex' B'
 	         | _ => NONE
 		  ) handle SubstFailed => NONE)
         | (LFSub (k, s)) =>  
@@ -352,13 +370,13 @@ struct
 
 		   
   and substCase (Eps (D, C), t) = Eps (substNormalDec(D, coerceSub t), substCase(C, dot1 t))
-    | substCase (NewC (D, C), t) = NewC (substNewDec(D, coerceSub t), substCase(C, dot1 t))
+    | substCase (NewC (D, C, fileInfo), t) = NewC (substNewDec(D, coerceSub t), substCase(C, dot1 t), fileInfo)
     | substCase (PopC (i, C), t) = let
                                          val (j, t') = popSub(i, t)
 				      in 
 					PopC(j, substCase(C, t'))
 				      end
-    | substCase (Match (patE, resE), t) = Match (EClo(patE, t), EClo(resE, t))
+    | substCase (Match (visibility, patE, resE), t) = Match (visibility, EClo(patE, t), EClo(resE, t))
     | substCase (MatchAnd (visibility, patE, C), t) = MatchAnd (visibility, EClo(patE, t), substCase(C, t))
 
 
@@ -368,11 +386,11 @@ struct
    * G' |- t : G
    * G' |- substE'(E,t) : A[t]
    *)
-  and bvarSub (k, id) = Var (Fixed k)
+  and bvarSub (k, id) = Var (Fixed k, NONE)
     | bvarSub (1, Dot((Prg E), t)) = E
     | bvarSub (1, Dot(Undef, t)) = raise SubstFailed
     | bvarSub (i, Dot(Ft, t)) = bvarSub(i-1, t)
-    | bvarSub (i, Shift id) = Var (Fixed (i+1))
+    | bvarSub (i, Shift id) = Var (Fixed (i+1), NONE)
     | bvarSub (i, Shift t) = EClo(bvarSub(i, t), Shift id)
               (* G |- i : A
 	       * G',A |- Shift t : G
@@ -389,27 +407,27 @@ struct
 	   *)
 
   and substE'(E, id) = E
-    | substE'(Var B, t) = (case (whnfBVar (B, t))
+    | substE'(Var (B, fileInfo), t) = (case (whnfBVar (B, t))
 			    of (MetaSub (k, s)) => bvarSub(k, s)
 			     | (LFSub(k, s)) => 
 			              (case (I.bvarSub(k, s)) 
-					 of (I.Idx k') => Var (Fixed k')
+					 of (I.Idx k') => Var (Fixed k', fileInfo)
 					  | (I.Exp U) => Quote U
 					  | I.Block _ => raise Domain
 					  | I.Undef => raise SubstFailed
 					   )
-                             | (VarRef B') => Var B')
+                             | (VarRef B') => Var (B', fileInfo))
 
     | substE'(Quote M, t) = Quote (I.EClo(M, coerceSub t))
     | substE'(Unit, _) = Unit
-    | substE'(Lam (Clist, F), t) = 
+    | substE'(Lam (Clist, F, fileInfo), t) = 
                         let
 			  val Clist' = map (fn C => substCase(C, t)) Clist
 			in
-			  Lam (Clist', FClo(F, coerceSub t))
+			  Lam (Clist', FClo(F, coerceSub t), fileInfo)
 			end
 
-    | substE'(New (D, E), t) = New (substNewDec(D, coerceSub t), EClo (E, dot1 t))
+    | substE'(New (D, E, fileInfo), t) = New (substNewDec(D, coerceSub t), EClo (E, dot1 t), fileInfo)
     | substE'(App (visible, E1, E2), t) = App (visible, EClo(E1, t), EClo(E2, t))
     | substE'(Pair (E1, E2, F), t) = Pair (EClo(E1, t), EClo(E2, t), FClo(F, coerceSub t))
     | substE'(ExpList Elist, t) = ExpList (map (fn E => EClo(E, t)) Elist)
@@ -434,9 +452,9 @@ struct
 				   EClo (E, dot1 t))
 
 
-    | substE'(EVar (r as ref NONE, t1), t2) = EVar (r, comp(t1,t2))
+    | substE'(EVar ((r as ref NONE, F), t1), t2) = EVar ((r,F), comp(t1,t2))
 	     
-    | substE'(EVar (ref (SOME E), t1), t2) = EClo(E, comp(t1,t2))
+    | substE'(EVar ((ref (SOME E),_), t1), t2) = EClo(E, comp(t1,t2))
     | substE'(EClo (E, t1), t2) = EClo (E, comp(t1, t2))
 	     
 
@@ -542,7 +560,7 @@ struct
    * Auxiliary Helpers
    * ****************************************** *)
   fun newPVar() = PVar (ref NONE)
-  fun newEVar() = EVar (ref NONE, id)
+  fun newEVar(F) = EVar ((ref NONE, F), id)
   fun newFVar(G) = FVar ((G, ref NONE, ref nil), I.id)
 
 
@@ -562,7 +580,7 @@ struct
 
   and updatePVarsFormula F = updatePVarsFormulaN (whnfF F)
   and updatePVarsFormulaN (Top) = ()
-    | updatePVarsFormulaN (All(visible, D, F)) = (updatePVarsNormalDec D ; updatePVarsFormula F)
+    | updatePVarsFormulaN (All(visible, W, D, F)) = (updatePVarsNormalDec D ; updatePVarsFormula F)
     | updatePVarsFormulaN (Exists(D, F)) = (updatePVarsNormalDec D ; updatePVarsFormula F)
     | updatePVarsFormulaN (Nabla(D, F)) = (updatePVarsNewDec D ; updatePVarsFormula F)
     | updatePVarsFormulaN (FormList Flist) = (map updatePVarsFormula Flist ; ())
@@ -574,27 +592,27 @@ struct
   and updatePVarsExpN (Var _) = ()
     | updatePVarsExpN (Quote _) = ()
     | updatePVarsExpN (Unit) = ()
-    | updatePVarsExpN (Lam (Clist, F)) = 
+    | updatePVarsExpN (Lam (Clist, F, fileInfo)) = 
            let
 	     val _ = map updatePVarsCaseBranch Clist
 	     val _ = updatePVarsFormula F
 	   in
 	     ()
 	   end
-    | updatePVarsExpN (New (D, E)) = (updatePVarsNewDec D ; updatePVarsExp E)
+    | updatePVarsExpN (New (D, E, fileInfo)) = (updatePVarsNewDec D ; updatePVarsExp E)
     | updatePVarsExpN (App (_, E1, E2)) = (updatePVarsExp E1 ; updatePVarsExp E2)
     | updatePVarsExpN (Pair (E1, E2, F)) = (updatePVarsExp E1 ; updatePVarsExp E2 ; updatePVarsFormula F)
     | updatePVarsExpN (ExpList Elist) = (map updatePVarsExp Elist ; ())
     | updatePVarsExpN (Proj(E, _)) = updatePVarsExp E
     | updatePVarsExpN (Pop(_, E)) = updatePVarsExp E
     | updatePVarsExpN (Fix(D, E)) = (updatePVarsNormalDec D; updatePVarsExp E)
-    | updatePVarsExpN (EVar (_, s)) = (updatePVarsSub s)
+    | updatePVarsExpN (EVar ((_,F), s)) = (updatePVarsFormula F ; updatePVarsSub s)
     | updatePVarsExpN (EClo _) = raise Domain (* not in whnf *)
 
   and updatePVarsCaseBranch (Eps (D, C)) = (updatePVarsNormalDec D ; updatePVarsCaseBranch C)
-    | updatePVarsCaseBranch (NewC (D, C)) = (updatePVarsNewDec D ; updatePVarsCaseBranch C)
+    | updatePVarsCaseBranch (NewC (D, C, fileInfo)) = (updatePVarsNewDec D ; updatePVarsCaseBranch C)
     | updatePVarsCaseBranch (PopC (i, C)) = (updatePVarsCaseBranch C)
-    | updatePVarsCaseBranch (Match (E1, E2)) = (updatePVarsExp E1 ; updatePVarsExp E2)
+    | updatePVarsCaseBranch (Match (_, E1, E2)) = (updatePVarsExp E1 ; updatePVarsExp E2)
     | updatePVarsCaseBranch (MatchAnd (_, E, C)) = (updatePVarsExp E ; updatePVarsCaseBranch C)
 
   and updatePVarsSub (Shift _) = ()
@@ -604,7 +622,22 @@ struct
   and updatePVarsFront (Prg E) = updatePVarsExp E
     | updatePVarsFront (Undef) = ()
 
- 
+
+  fun makeParamList' (I.Null, k) = []
+    | makeParamList' (I.Decl(G, InstantiableDec (NormalDec(_, LF(isP, _)))), k) = 
+          (case (whnfP isP)
+	     of (Param) => k :: (makeParamList' (G, k+1))
+	      | _ => makeParamList' (G, k+1))
+    | makeParamList' (I.Decl(G, InstantiableDec (NormalDec(_, Meta(isP, _)))), k) = 
+          (case (whnfP isP)
+	     of (Param) => k :: (makeParamList' (G, k+1))
+	      | _ => makeParamList' (G, k+1))
+    | makeParamList' (I.Decl(G, NonInstantiableDec _), k) = 
+	     k :: (makeParamList' (G, k+1))
+          
+
+  (* get a list of parameters in G *)
+  fun makeParamList G = makeParamList' (G, 1)
 
 
 end
